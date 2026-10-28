@@ -129,7 +129,7 @@ h1, h2, .brand strong {
 .text { background: none; border: 0; cursor: pointer; color: var(--teal); }
 .page { padding: 28px 32px 48px; }
 .hero-line, .row-btns { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 18px 0; }
 .stats article {
   background: var(--card); border: 1px solid var(--line);
   border-radius: 18px; padding: 16px 18px;
@@ -367,6 +367,73 @@ td { padding: 12px 8px; border-bottom: 1px solid #efe8dc; vertical-align: top; }
 .board-legend { display: grid; gap: 6px; font-size: 14px; }
 .board-legend p { margin: 0; display: flex; gap: 10px; align-items: center; }
 .board-foot a { color: #e8c37a; font-size: 13px; }
+.board-row.away { opacity: .7; border-style: dashed; }
+.board-row strong { display: grid; }
+.board-note { font-size: 13px; letter-spacing: 0; font-weight: 600; color: #fcd34d; }
+.board-live { margin: 0 0 8px; font-size: 13px; opacity: .7; }
+.board-live.on { color: #4ade80; opacity: 1; }
+
+/* Tiempo real y avisos */
+.live.off { color: var(--muted); }
+.live.on::before { content: "● "; color: #16a34a; }
+.badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.badge { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 8px; background: var(--sand); color: var(--ink); }
+.badge.late { background: #ffe4e6; color: var(--i); }
+.badge.soon { background: #ffedd5; color: var(--ii); }
+.badge.away { background: #e0e7ff; color: #3730a3; }
+.badge.sent { background: #dcfce7; color: #166534; }
+.badge.preg { background: #fce7f3; color: #9d174d; }
+.q.overdue { box-shadow: inset 0 0 0 1px #fecdd3; background: #fff7f7; }
+.q.away { opacity: .78; }
+.notice-bar {
+  display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center;
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 10px 14px; margin-bottom: 14px; font-size: 14px;
+}
+.notice-bar small { color: var(--muted); width: 100%; }
+.ghost.wa { border-color: #16a34a; color: #166534; }
+.care-meta { background: var(--sand); border-radius: 14px; padding: 10px 12px; margin: 10px 0; }
+.care-meta p { margin: 6px 0; font-size: 13px; }
+
+/* Línea de tiempo */
+.timeline { display: grid; gap: 8px; }
+.tl-trend { margin: 0; font-weight: 700; font-size: 13px; color: var(--muted); }
+.tl-trend.up { color: var(--i); }
+.tl-trend.down { color: #15803d; }
+.tl-chart { width: 100%; height: auto; background: var(--sand); border-radius: 12px; }
+.tl-grid { stroke: rgba(0,0,0,.12); stroke-dasharray: 3 3; }
+.tl-grid-label { font-size: 8px; fill: var(--muted); text-anchor: end; }
+.tl-line { fill: none; stroke: var(--teal); stroke-width: 2; }
+.tl-dot { stroke: #fff; stroke-width: 1.5; fill: var(--v); }
+.tl-dot.i { fill: var(--i); }
+.tl-dot.ii { fill: var(--ii); }
+.tl-dot.iii { fill: var(--iii); }
+.tl-dot.iv { fill: var(--iv); }
+.tl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tl-list li { display: grid; grid-template-columns: 54px 1fr; gap: 10px; border-left: 3px solid var(--line); padding: 4px 0 4px 10px; font-size: 13px; }
+.tl-list li.i { border-left-color: var(--i); }
+.tl-list li.ii { border-left-color: var(--ii); }
+.tl-list li.iii { border-left-color: var(--iii); }
+.tl-list li.iv { border-left-color: var(--iv); }
+.tl-time { display: grid; font-weight: 700; }
+.tl-time small { font-weight: 400; color: var(--muted); }
+.tl-diff { color: var(--ii); font-weight: 600; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover, tr.sel { background: var(--sand); }
+
+/* Reporte del turno */
+.report-filters { display: flex; gap: 14px; flex-wrap: wrap; margin: 6px 0 4px; }
+.report-filters label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.mini-table td { padding: 4px 8px; }
+td.late { color: var(--i); font-weight: 700; }
+.print-only { display: none; }
+@media print {
+  .side, .bar, .toast, .no-print { display: none !important; }
+  .app { display: block; }
+  .print-only { display: block; }
+  .page { padding: 0; }
+  .sheet, .stats article { break-inside: avoid; border-color: #ccc; }
+  body { background: #fff; }
+}
 
 @media (max-width: 980px) {
   .auth, .app, .split, .g2, .g3, .stats, .q, .banner { display: flex; flex-direction: column; }

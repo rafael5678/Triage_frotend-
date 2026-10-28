@@ -46,9 +46,14 @@ function historyToIds(history) {
   return String(history).split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+function time(value) {
+  return value ? new Date(value).getTime() : null;
+}
+
 export function mapFromApi(row) {
   const score = Number(row.riskScore ?? row.scoreRiesgo ?? 0);
-  const arrivedAt = (row.evaluatedAt || row.evaluadoEn) ? new Date(row.evaluatedAt || row.evaluadoEn).getTime() : Date.now();
+  const evaluatedAt = time(row.evaluatedAt || row.evaluadoEn) || Date.now();
+  const arrivedAt = time(row.arrivedAt) || evaluatedAt;
   const statusCode = row.status || row.estado;
   const history = row.history || row.antecedentes || "";
   return {
@@ -74,7 +79,18 @@ export function mapFromApi(row) {
     triageLevel: row.triageLevel,
     priority: priorityFromScore(score),
     status: STATUS[statusCode] || statusCode || "En espera",
+    statusCode,
     arrivedAt,
+    evaluatedAt,
+    careStartedAt: time(row.careStartedAt),
+    evaluatedBy: row.evaluatedBy || "",
+    phone: row.phone || "",
+    pregnant: Boolean(row.pregnant),
+    gestationWeeks: row.gestationWeeks ?? null,
+    present: row.present !== false,
+    notifiedAt: time(row.notifiedAt),
+    notifiedChannel: row.notifiedChannel || "",
+    queuePosition: row.queuePosition ?? null,
     comorbidityIds: historyToIds(history),
     scoreSource: row.scoreSource || row.fuenteScore,
     iaActive: Boolean(row.aiActive ?? row.iaActiva),
@@ -114,6 +130,9 @@ function intakeBody(form) {
     conditionId: form.conditionId || form.lesionId,
     reason: form.reason || form.motivo,
     history,
+    phone: form.phone ? String(form.phone).trim() : null,
+    pregnant: (form.sex || form.sexo) === "F" && Boolean(form.pregnant),
+    gestationWeeks: (form.sex || form.sexo) === "F" && form.pregnant ? optionalNumber(form.gestationWeeks) : null,
   };
 }
 
@@ -135,7 +154,9 @@ function vitalsBody(form, patientId, { withPhoto = true } = {}) {
     painScale: optionalNumber(form.painScale),
     consciousness: form.consciousness || null,
     estimatedFields: form.estimatedFields || [],
+    evaluatedBy: form.evaluatedBy || null,
   };
+  if (form.present === false) body.present = false;
   if (withPhoto && form.photo?.dataUrl) {
     body.photoBase64 = form.photo.dataUrl;
     body.photoMime = form.photo.mime;
@@ -178,6 +199,67 @@ export async function reevaluatePatient(id, form) {
 
 export async function startCare(id) {
   return mapFromApi(await request(QUEUE_URL, `/api/v1/triage/care/${id}`, { method: "PATCH" }));
+}
+
+export async function finishCare(id, status = "ATENDIDO") {
+  return mapFromApi(await request(QUEUE_URL, `/api/v1/triage/care/${id}/status?status=${status}`, { method: "PATCH" }));
+}
+
+/** Todas las mediciones del paciente, de la más antigua a la más reciente. */
+export async function fetchHistory(patientId) {
+  const rows = await request(EVAL_URL, `/api/v1/triage/patients/${patientId}/history`);
+  return (rows || []).map(mapFromApi);
+}
+
+export async function setPresence(id, present) {
+  return mapFromApi(await request(QUEUE_URL, `/api/v1/triage/care/${id}/presence?present=${present}`, { method: "PATCH" }));
+}
+
+export async function markNotified(id, channel = "MANUAL") {
+  return mapFromApi(await request(QUEUE_URL, `/api/v1/triage/care/${id}/notified?channel=${channel}`, { method: "POST" }));
+}
+
+export async function fetchQueueHealth() {
+  return request(QUEUE_URL, "/api/v1/triage/health", {}, 20000);
+}
+
+/**
+ * Escucha los cambios de la cola en vivo. onChange se llama cuando algo cambió (llegó alguien,
+ * lo reevaluaron, pasó a atención). Devuelve una función para dejar de escuchar.
+ */
+export function subscribeEvents(onChange, onStatus = () => {}) {
+  if (typeof EventSource === "undefined" || !QUEUE_URL) {
+    onStatus(false);
+    return () => {};
+  }
+  let source = null;
+  // Una conexión abierta mantiene despiertos los servicios en Azure: se cierra si nadie mira la pestaña.
+  const open = () => {
+    if (source) return;
+    source = new EventSource(`${QUEUE_URL}/api/v1/triage/events`);
+    source.addEventListener("hola", () => onStatus(true));
+    source.addEventListener("cambio", () => onChange());
+    source.onerror = () => onStatus(false);
+  };
+  const close = () => {
+    source?.close();
+    source = null;
+    onStatus(false);
+  };
+  const onVisibility = () => {
+    if (document.visibilityState === "visible") {
+      open();
+      onChange();
+    } else {
+      close();
+    }
+  };
+  if (document.visibilityState !== "hidden") open();
+  document.addEventListener("visibilitychange", onVisibility);
+  return () => {
+    document.removeEventListener("visibilitychange", onVisibility);
+    close();
+  };
 }
 
 export async function login(credentials) {

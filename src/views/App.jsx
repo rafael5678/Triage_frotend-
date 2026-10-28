@@ -1,17 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { COMORBIDITIES } from "../ml/conditions";
 import { featureContributions, getModel, predictScore } from "../ml/model";
 import { comparePriority, createPatient } from "../models/patient";
 import { explainWhy } from "../models/explain";
-import { analyzeTriage, fetchPatients, fetchSymptoms, login as loginRequest, registerAndScore, reevaluatePatient, startCare } from "../services/api";
+import {
+  analyzeTriage, fetchPatients, fetchQueueHealth, fetchSymptoms, finishCare, login as loginRequest, markNotified,
+  registerAndScore, reevaluatePatient, setPresence, startCare, subscribeEvents,
+} from "../services/api";
 import { CARE_TARGETS, estimateWaitMinutes, waitSharePercent, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
 import { AVPU } from "../models/levels";
+import { minutesLabel, noticeDue, waitInfo, whatsappLink } from "../models/notice";
 import AdminPortal from "./AdminPortal";
 import AiIntake from "./AiIntake";
 import FieldHelp from "./FieldHelp";
 import Recommendations, { DestinationCard, EstimatedWarning } from "./Recommendations";
+import ShiftReport from "./ShiftReport";
 import StatsView from "./StatsView";
+import Timeline from "./Timeline";
 
 const SESSION_KEY = "triage.session";
 
@@ -20,6 +26,7 @@ const NAV = [
   ["intake", "Nuevo ingreso"],
   ["patients", "Pacientes"],
   ["stats", "Estadísticas"],
+  ["report", "Reporte del turno"],
   ["history", "Historial"],
   ["model", "Cómo calcula"],
   ["ethics", "Uso responsable"],
@@ -44,7 +51,25 @@ const EMPTY_FORM = {
   comorbidityIds: [],
   estimatedFields: [],
   photo: null,
+  phone: "",
+  pregnant: false,
+  gestationWeeks: "",
+  present: true,
 };
+
+/** Insignias de tiempo y presencia que se ven en la cola. */
+function WaitBadges({ patient, now }) {
+  const w = waitInfo(patient, now);
+  return (
+    <span className="badges">
+      {w.overdue && <span className="badge late">Vencido hace {minutesLabel(w.left)}</span>}
+      {w.soon && <span className="badge soon">Vence en {w.left} min</span>}
+      {patient.present === false && <span className="badge away">No ha llegado</span>}
+      {patient.notifiedAt && <span className="badge sent">Avisado{patient.notifiedChannel === "WHATSAPP" ? " por WhatsApp" : ""}</span>}
+      {patient.pregnant && <span className="badge preg">Embarazo{patient.gestationWeeks ? ` ${patient.gestationWeeks} sem` : ""}</span>}
+    </span>
+  );
+}
 
 function Logo() {
   return (
@@ -107,11 +132,53 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [recheck, setRecheck] = useState(null);
   const [liveQueue, setLiveQueue] = useState({ loading: true, patients: [] });
+  const [now, setNow] = useState(Date.now());
+  const [live, setLive] = useState(false);
+  const [whatsappMode, setWhatsappMode] = useState("");
+  const [historyFor, setHistoryFor] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const reloadTimer = useRef(null);
 
   const waiting = useMemo(
     () => patients.filter((p) => p.status === "En espera").sort(comparePriority),
     [patients]
   );
+  const positionOf = (id) => {
+    const i = waiting.findIndex((p) => p.id === id);
+    return i < 0 ? null : i + 1;
+  };
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  /** Cola en vivo: el servidor avisa cuando algo cambió y aquí se vuelve a pedir la lista. */
+  useEffect(() => {
+    if (!user || user.role === "ADMIN") return undefined;
+    const reload = () => {
+      clearTimeout(reloadTimer.current);
+      reloadTimer.current = setTimeout(() => {
+        fetchPatients()
+          .then((list) => {
+            setPatients(list);
+            setSelected((current) => (current ? list.find((p) => p.id === current.id) || current : current));
+            setRefreshKey((k) => k + 1);
+          })
+          .catch(() => {});
+      }, 400);
+    };
+    const stop = subscribeEvents(reload, setLive);
+    const fallback = setInterval(() => {
+      if (document.visibilityState === "visible") reload();
+    }, 60000);
+    fetchQueueHealth().then((h) => setWhatsappMode(h?.whatsapp || "")).catch(() => {});
+    return () => {
+      stop();
+      clearInterval(fallback);
+      clearTimeout(reloadTimer.current);
+    };
+  }, [user]);
 
   useEffect(() => {
     fetchPatients()
@@ -165,6 +232,7 @@ export default function App() {
       temperature: Number(source.temperature),
       respiratoryRate: Number(source.respiratoryRate),
       comorbidityIds: source.comorbidityIds,
+      evaluatedBy: user?.displayName || user?.username || null,
     };
   }
 
@@ -199,7 +267,18 @@ export default function App() {
     local.contributions = featureContributions(pack.model, local);
     try {
       const scored = await analyzeTriage(toPayload(form), local.score);
-      const patient = { ...local, ...scored, name: form.name, document: form.document, comorbidityIds: form.comorbidityIds };
+      const patient = {
+        ...local,
+        ...scored,
+        name: form.name,
+        document: form.document,
+        comorbidityIds: form.comorbidityIds,
+        phone: form.phone,
+        present: form.present,
+        pregnant: form.sex === "F" && form.pregnant,
+        gestationWeeks: form.gestationWeeks,
+        evaluatedBy: local.evaluatedBy,
+      };
       patient.explanation = explainWhy(patient);
       setResult(patient);
       setView("result");
@@ -229,16 +308,56 @@ export default function App() {
     setResult(null);
   }
 
+  function replacePatient(updated) {
+    setPatients((list) => list.map((p) => (p.id === updated.id ? { ...p, ...updated, contributions: p.contributions } : p)));
+    setSelected((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
+  }
+
   async function moveToCare(id) {
     try {
-      await startCare(id);
+      const updated = await startCare(id);
+      replacePatient(updated);
+      const minutes = updated.careStartedAt ? Math.round((updated.careStartedAt - updated.arrivedAt) / 60000) : null;
+      flash(`Pasa a atención${minutes != null ? ` después de ${minutesLabel(minutes)} de espera` : ""}.`);
     } catch (error) {
       flash(error.message);
       return;
     }
-    setPatients((list) => list.map((p) => (p.id === id ? { ...p, status: "En atención" } : p)));
-    flash("Salió de la cola: pasa a atención.");
     setSelected(null);
+  }
+
+  async function closeCare(id, status) {
+    try {
+      replacePatient(await finishCare(id, status));
+      flash(status === "ATENDIDO" ? "Atención terminada." : "Se marcó como cancelado (se fue sin ser atendido).");
+    } catch (error) {
+      flash(error.message);
+    }
+  }
+
+  async function togglePresence(patient) {
+    try {
+      const updated = await setPresence(patient.id, patient.present === false);
+      replacePatient(updated);
+      flash(updated.present ? `${patient.name} ya está en la sala.` : `${patient.name} quedó como "no ha llegado".`);
+    } catch (error) {
+      flash(error.message);
+    }
+  }
+
+  /** Abre WhatsApp con el mensaje listo y deja constancia del aviso. */
+  async function sendWhatsapp(patient) {
+    const link = whatsappLink(patient, positionOf(patient.id), now);
+    if (!link) {
+      flash("Este paciente no tiene celular registrado.");
+      return;
+    }
+    window.open(link, "_blank", "noopener");
+    try {
+      replacePatient(await markNotified(patient.id, "MANUAL"));
+    } catch (error) {
+      flash(`Se abrió WhatsApp, pero no se guardó el aviso: ${error.message}`);
+    }
   }
 
   async function applyRecheck(event) {
@@ -258,6 +377,7 @@ export default function App() {
       flash(error.message);
       return;
     }
+    setRefreshKey((k) => k + 1);
     const merged = patients.map((p) => (p.id === next.id ? next : p));
     const queue = merged.filter((p) => p.status === "En espera").sort(comparePriority);
     const positionAfter = queue.findIndex((p) => p.id === next.id);
@@ -366,7 +486,9 @@ export default function App() {
         <header className="bar">
           <input placeholder="Buscar por nombre o documento…" value={query} onChange={(e) => setQuery(e.target.value)} />
           <div className="bar-meta">
-            <span className="live">{waiting.length} en espera (datos de la base)</span>
+            <span className={`live ${live ? "on" : "off"}`} title={live ? "La cola se actualiza sola cuando algo cambia" : "Sin conexión en vivo: se actualiza cada minuto"}>
+              {waiting.length} en espera · {live ? "en vivo" : "cada minuto"}
+            </span>
             <button className="text" onClick={logout}>Salir</button>
           </div>
         </header>
@@ -384,23 +506,38 @@ export default function App() {
             <div className="stats">
               <article><small>En espera</small><b>{waiting.length}</b></article>
               <article className="crit"><small>Puntaje 62 o más</small><b>{waiting.filter((p) => p.score >= 62).length}</b></article>
-              <article><small>Puntaje medio</small><b>{waiting.length ? (waiting.reduce((a, p) => a + p.score, 0) / waiting.length).toFixed(1) : "—"}</b></article>
+              <article className={waiting.some((p) => waitInfo(p, now).overdue) ? "crit" : ""}>
+                <small>Pasaron su tiempo máximo</small><b>{waiting.filter((p) => waitInfo(p, now).overdue).length}</b>
+              </article>
+              <article><small>No han llegado</small><b>{waiting.filter((p) => p.present === false).length}</b></article>
               <article><small>En atención</small><b>{patients.filter((p) => p.status === "En atención").length}</b></article>
             </div>
+            {waiting.some((p, i) => noticeDue(p, i + 1, now) && p.phone) && (
+              <div className="notice-bar">
+                <b>Avisar por WhatsApp:</b>{" "}
+                {waiting.map((p, i) => ({ p, pos: i + 1 })).filter(({ p, pos }) => noticeDue(p, pos, now) && p.phone).map(({ p }) => (
+                  <button key={p.id} className="text" onClick={() => sendWhatsapp(p)}>{p.name}</button>
+                ))}
+                <small>{whatsappMode === "automatico"
+                  ? " El servidor también los avisa solo; el botón es por si no llega."
+                  : " El aviso automático no está configurado: toque el nombre para abrir WhatsApp con el mensaje listo."}</small>
+              </div>
+            )}
             <div className="split">
               <ol className="queue">
                 {waiting.length === 0 && <li className="empty">No hay pacientes en espera en la base de datos.</li>}
                 {waiting.map((p, i) => (
-                  <li key={p.id} className={`q ${p.priority.tone} ${selected?.id === p.id ? "sel" : ""}`} onClick={() => setSelected(p)}>
+                  <li key={p.id} className={`q ${p.priority.tone} ${selected?.id === p.id ? "sel" : ""} ${waitInfo(p, now).overdue ? "overdue" : ""} ${p.present === false ? "away" : ""}`} onClick={() => setSelected(p)}>
                     <em>{String(i + 1).padStart(2, "0")}</em>
                     <div>
                       <strong>{p.name}</strong>
-                      <small>{conditionLabel(p.conditionId)}</small>
+                      <small>{conditionLabel(p.conditionId)} · lleva {minutesLabel(waitInfo(p, now).waited)}</small>
+                      <WaitBadges patient={p} now={now} />
                     </div>
                     <Chip priority={p.priority} />
                     <div className="sc">
                       <b>{Number(p.score).toFixed(1)}</b>
-                      <small>~{estimateWaitMinutes(p.score, waiting)} min</small>
+                      <small>meta {p.maxWaitMinutes ?? estimateWaitMinutes(p.score, waiting)} min</small>
                     </div>
                     <span className="wait">{waitSharePercent(p.score)}%</span>
                   </li>
@@ -427,10 +564,31 @@ export default function App() {
                     <ul className="why-list">
                       {selectedExplain.reasons.slice(0, 4).map((r) => <li key={r}>{r}</li>)}
                     </ul>
+                    {selected.status === "En espera" && (
+                      <div className="care-meta">
+                        <WaitBadges patient={selected} now={now} />
+                        <p className="muted">
+                          Llegó a las {new Date(selected.arrivedAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })} · lleva {minutesLabel(waitInfo(selected, now).waited)} · meta {waitInfo(selected, now).max} min
+                          {selected.evaluatedBy ? ` · signos: ${selected.evaluatedBy}` : ""}
+                        </p>
+                        <div className="row-btns">
+                          <button className="ghost" onClick={() => togglePresence(selected)}>
+                            {selected.present === false ? "Ya llegó a la sala" : "No está en la sala"}
+                          </button>
+                          {selected.phone ? (
+                            <button className="ghost wa" onClick={() => sendWhatsapp(selected)}>
+                              {selected.notifiedAt ? "Avisar otra vez por WhatsApp" : "Avisar por WhatsApp"}
+                            </button>
+                          ) : <small className="muted">Sin celular: no se le puede avisar.</small>}
+                        </div>
+                      </div>
+                    )}
                     <div className="row-btns">
                       <button className="btn" onClick={() => moveToCare(selected.id)}>Pasar a atención</button>
                       <button className="ghost" onClick={() => { setRecheck({ ...selected, estimatedFields: [] }); setView("recheck"); }}>Volver a medir signos</button>
                     </div>
+                    <h4 className="mini-title">Evolución</h4>
+                    <Timeline patientId={selected.id} refreshKey={refreshKey} />
                   </>
                 )}
               </aside>
@@ -462,6 +620,30 @@ export default function App() {
                     <option value="O">Otro / no dice</option>
                   </select>
                 </Field>
+                <Field label="Celular (WhatsApp)" help="Para avisarle cuando se acerque su turno si sale de la sala. Ej.: 300 123 4567.">
+                  <input type="tel" inputMode="tel" maxLength={20} value={form.phone} onChange={(e) => setField("phone", e.target.value)} />
+                </Field>
+                <Field label="¿Ya está en la sala?" help="Si se registró por teléfono o desde la entrada y todavía no llega, marque que no.">
+                  <select value={form.present ? "si" : "no"} onChange={(e) => setField("present", e.target.value === "si")}>
+                    <option value="si">Sí, está aquí</option>
+                    <option value="no">Todavía no ha llegado</option>
+                  </select>
+                </Field>
+                {form.sex === "F" && Number(form.age) >= 10 && Number(form.age) <= 55 && (
+                  <>
+                    <Field label="¿Está embarazada?" help="El embarazo cambia qué presión es peligrosa y activa la valoración obstétrica.">
+                      <select value={form.pregnant ? "si" : "no"} onChange={(e) => setField("pregnant", e.target.value === "si")}>
+                        <option value="no">No / no sabe</option>
+                        <option value="si">Sí</option>
+                      </select>
+                    </Field>
+                    {form.pregnant && (
+                      <Field label="Semanas de embarazo" help="Si no sabe, déjelo vacío. Desde la semana 20 se vigila la preeclampsia.">
+                        <input type="number" min="1" max="45" value={form.gestationWeeks} onChange={(e) => setField("gestationWeeks", e.target.value)} />
+                      </Field>
+                    )}
+                  </>
+                )}
                 <Field className="full" label="¿Qué le pasa? (lo más grave)" help="Elija la opción que más se parezca. Eso cambia el orden de la cola.">
                   <select required value={form.conditionId} onChange={(e) => setField("conditionId", e.target.value)}>
                     <option value="">Seleccione una opción…</option>
@@ -628,16 +810,25 @@ export default function App() {
             <div className="sheet table-wrap">
               {filtered.length === 0 && <p className="muted">No hay registros todavía.</p>}
               <table>
-                <thead><tr><th>Persona</th><th>Qué le pasa</th><th>Puntaje</th><th>Prioridad</th><th>Área</th><th>Estado</th></tr></thead>
+                <thead><tr><th>Persona</th><th>Qué le pasa</th><th>Puntaje</th><th>Prioridad</th><th>Área</th><th>Estado</th><th></th></tr></thead>
                 <tbody>
                   {filtered.sort(comparePriority).map((p) => (
                     <tr key={p.id}>
-                      <td><b>{p.name}</b><div className="muted">{p.age} años · {p.document}</div></td>
+                      <td><b>{p.name}</b><div className="muted">{p.age} años · {p.document}{p.phone ? ` · ${p.phone}` : ""}</div></td>
                       <td>{conditionLabel(p.conditionId)}</td>
                       <td>{Number(p.score).toFixed(1)}</td>
                       <td><Chip priority={p.priority} /></td>
                       <td>{p.destinationArea || "—"}{p.destinationCode && <div className="muted">{p.destinationCode}</div>}</td>
-                      <td>{p.status}</td>
+                      <td>
+                        {p.status}
+                        {p.status === "En espera" && <WaitBadges patient={p} now={now} />}
+                        {p.careStartedAt && <div className="muted">atendido tras {minutesLabel(Math.round((p.careStartedAt - p.arrivedAt) / 60000))}</div>}
+                      </td>
+                      <td className="row-btns">
+                        {p.status === "En atención" && <button className="ghost" onClick={() => closeCare(p.id, "ATENDIDO")}>Terminar atención</button>}
+                        {p.status === "En espera" && <button className="text" onClick={() => closeCare(p.id, "CANCELADO")}>Se fue</button>}
+                        <button className="text" onClick={() => { setHistoryFor(p); setView("history"); }}>Evolución</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -648,23 +839,39 @@ export default function App() {
 
         {view === "stats" && <StatsView conditionLabel={conditionLabel} />}
 
+        {view === "report" && <ShiftReport patients={patients} conditionLabel={conditionLabel} user={user} />}
+
         {view === "history" && (
           <section className="page">
             <h1>Historial</h1>
-            <div className="sheet table-wrap">
-              <table>
-                <thead><tr><th>Persona</th><th>Hora del puntaje</th><th>Prioridad</th><th>NEWS2</th></tr></thead>
-                <tbody>
-                  {patients.map((p) => (
-                    <tr key={p.id}>
-                      <td>{p.name}</td>
-                      <td>{new Date(p.arrivedAt).toLocaleString("es-CO")}</td>
-                      <td><Chip priority={p.priority} /></td>
-                      <td>{p.news2 ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <p className="sub">Cada vez que se toman los signos queda guardado: quién los tomó, cómo cambió el puntaje y cuándo pasó a atención.</p>
+            <div className="split">
+              <div className="sheet table-wrap">
+                <table>
+                  <thead><tr><th>Persona</th><th>Llegó</th><th>Prioridad</th><th>NEWS2</th><th>Estado</th></tr></thead>
+                  <tbody>
+                    {filtered.slice().sort((a, b) => b.evaluatedAt - a.evaluatedAt).map((p) => (
+                      <tr key={p.id} className={`clickable ${historyFor?.id === p.id ? "sel" : ""}`} onClick={() => setHistoryFor(p)}>
+                        <td><b>{p.name}</b><div className="muted">{p.document}</div></td>
+                        <td>{new Date(p.arrivedAt).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                        <td><Chip priority={p.priority} /></td>
+                        <td>{p.news2 ?? "—"}</td>
+                        <td>{p.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <aside className="sheet">
+                {!historyFor && <p className="muted">Toque un paciente para ver su evolución.</p>}
+                {historyFor && (
+                  <>
+                    <h3>{historyFor.name}</h3>
+                    <p className="muted">{historyFor.age} años · {conditionLabel(historyFor.conditionId)}{historyFor.pregnant ? ` · embarazo${historyFor.gestationWeeks ? ` de ${historyFor.gestationWeeks} semanas` : ""}` : ""}</p>
+                    <Timeline patientId={historyFor.id} refreshKey={refreshKey} />
+                  </>
+                )}
+              </aside>
             </div>
           </section>
         )}
@@ -696,6 +903,10 @@ export default function App() {
                   <li>Si se vuelven a tomar los signos y empeoran, el puntaje sube y puede adelantar.</li>
                   <li>La conciencia (AVPU) suma en NEWS2. Si no responde o solo responde al dolor, sube a crítica. La glucosa por debajo de 54 o por encima de 600 también sube el piso.</li>
                   <li>Según el nivel se elige el área: reanimación, urgencias críticas, urgencias generales, consulta prioritaria o consulta externa. El dolor de pecho, el derrame, el trauma o la sepsis activan su código, y a los menores de 14 se les marca pediatría.</li>
+                  <li>En menores de 16 años el pulso, la respiración y la presión se comparan con lo normal para su edad (un bebé con 140 latidos está bien; un adulto no).</li>
+                  <li>En una embarazada, una presión de 140/90 ya es alerta y de 160/110 es grave: se activa el código preeclampsia. El sangrado activa el código rojo obstétrico y la convulsión, el código eclampsia.</li>
+                  <li>La espera se cuenta desde que llegó, aunque lo vuelvan a medir. Si pasa su tiempo máximo, la cola lo marca como vencido.</li>
+                  <li>Si quedan 10 minutos o menos, o si está entre los 2 primeros, se le avisa por WhatsApp una sola vez.</li>
                 </ol>
               </div>
             </div>
