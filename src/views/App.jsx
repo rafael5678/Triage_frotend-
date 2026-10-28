@@ -6,7 +6,12 @@ import { explainWhy } from "../models/explain";
 import { analyzeTriage, fetchPatients, fetchSymptoms, login as loginRequest, registerAndScore, reevaluatePatient, startCare } from "../services/api";
 import { CARE_TARGETS, estimateWaitMinutes, waitSharePercent, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
+import { AVPU } from "../models/levels";
 import AdminPortal from "./AdminPortal";
+import AiIntake from "./AiIntake";
+import FieldHelp from "./FieldHelp";
+import Recommendations, { DestinationCard, EstimatedWarning } from "./Recommendations";
+import StatsView from "./StatsView";
 
 const SESSION_KEY = "triage.session";
 
@@ -14,6 +19,7 @@ const NAV = [
   ["queue", "Sala de espera"],
   ["intake", "Nuevo ingreso"],
   ["patients", "Pacientes"],
+  ["stats", "Estadísticas"],
   ["history", "Historial"],
   ["model", "Cómo calcula"],
   ["ethics", "Uso responsable"],
@@ -32,7 +38,12 @@ const EMPTY_FORM = {
   spo2: "",
   temperature: "",
   respiratoryRate: "",
+  glucose: "",
+  painScale: "",
+  consciousness: "",
   comorbidityIds: [],
+  estimatedFields: [],
+  photo: null,
 };
 
 function Logo() {
@@ -55,13 +66,18 @@ function Chip({ priority }) {
   return <span className={`chip ${priority.tone}`}>{priority.chip}</span>;
 }
 
-function Field({ label, help, children, className }) {
+/** ask: nombre del dato para que la IA lo explique; estimated: el valor lo puso la IA y falta medirlo. */
+function Field({ label, help, children, className, ask, value, context, estimated }) {
   return (
-    <label className={className}>
-      {label}
+    <div className={`field ${className || ""} ${estimated ? "is-estimated" : ""}`.trim()}>
+      <span className="label-row">
+        {label}
+        {ask && <FieldHelp field={ask} value={value} context={context} />}
+        {estimated && <span className="est-badge">Estimado por IA · medir</span>}
+      </span>
       {children}
       {help && <small className="field-help">{help}</small>}
-    </label>
+    </div>
   );
 }
 
@@ -125,8 +141,18 @@ export default function App() {
   }
 
   function setField(key, value) {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+      estimatedFields: (current.estimatedFields || []).filter((f) => f !== key),
+    }));
   }
+
+  function applyForm(patch) {
+    setForm((current) => ({ ...current, ...patch }));
+  }
+
+  const caseContext = `${form.age ? `${form.age} años` : ""} ${form.sex || ""} ${conditionLabel(form.conditionId)} ${form.reason || ""}`.trim();
 
   function toPayload(source) {
     return {
@@ -269,6 +295,7 @@ export default function App() {
             {loginError && <p className="form-err">{loginError}</p>}
             <button className="btn" type="submit" disabled={loginBusy}>{loginBusy ? "Comprobando…" : "Entrar"}</button>
           </form>
+          <p className="board-link"><a href="#/sala">Abrir la pantalla de la sala de espera (para el televisor)</a></p>
         </section>
         <aside className="auth-visual">
           <div className="glass glass-wide">
@@ -300,7 +327,7 @@ export default function App() {
                 ({waitSharePercent(topWaiting.score)}% de una espera larga).
               </p>
             )}
-            {liveQueue.loading && <small className="glass-status">Consultando la sala… si Render está dormido puede tardar unos segundos.</small>}
+            {liveQueue.loading && <small className="glass-status">Consultando la sala… si el servidor está dormido puede tardar hasta un minuto.</small>}
             {liveQueue.offline && <small className="glass-status">Servidor aún no responde. Puedes entrar igual; la tabla de espera es del protocolo de triage.</small>}
             {!liveQueue.loading && !liveQueue.offline && !topWaiting && (
               <small className="glass-status">Sala vacía en la base. Los tiempos de arriba son la meta según gravedad.</small>
@@ -388,12 +415,21 @@ export default function App() {
                     <p className="muted">{selectedExplain.meaning}</p>
                     <p className="scoreline">Puntaje <b>{Number(selected.score).toFixed(1)}</b> / 100</p>
                     <p className="muted">{waitSummary(selected.score, waiting).text} Porcentaje de espera: {waitSharePercent(selected.score)}% (100% = ~2 horas en un caso leve).</p>
+                    <DestinationCard patient={selected} compact />
+                    <EstimatedWarning fields={selected.estimatedFields} />
+                    {selected.immediateActions?.length > 0 && (
+                      <>
+                        <h4 className="mini-title">Hacer ya</h4>
+                        <ul className="why-list">{selected.immediateActions.slice(0, 3).map((a) => <li key={a}>{a}</li>)}</ul>
+                      </>
+                    )}
+                    <h4 className="mini-title">Por qué</h4>
                     <ul className="why-list">
                       {selectedExplain.reasons.slice(0, 4).map((r) => <li key={r}>{r}</li>)}
                     </ul>
                     <div className="row-btns">
                       <button className="btn" onClick={() => moveToCare(selected.id)}>Pasar a atención</button>
-                      <button className="ghost" onClick={() => { setRecheck({ ...selected }); setView("recheck"); }}>Volver a medir signos</button>
+                      <button className="ghost" onClick={() => { setRecheck({ ...selected, estimatedFields: [] }); setView("recheck"); }}>Volver a medir signos</button>
                     </div>
                   </>
                 )}
@@ -407,6 +443,7 @@ export default function App() {
             <h1>Nuevo ingreso</h1>
             <p className="sub">Escribe lo que ves o te dicen. No hace falta saber medicina: cada casilla explica qué pedir.</p>
             <form className="sheet" onSubmit={analyze}>
+              <AiIntake form={form} onApply={applyForm} comorbidities={COMORBIDITIES} flash={flash} />
               <h3>Quién es</h3>
               <div className="g2">
                 <Field label="Nombre y apellido" help="Como aparece en la cédula o como se presenta.">
@@ -439,23 +476,47 @@ export default function App() {
               <h3>Números del cuerpo (signos vitales)</h3>
               <p className="sub">Los toma el tensiómetro, el termómetro y el clip del dedo (oxímetro). Si aún no los tienen, pídalos al que toma los signos.</p>
               <div className="g3">
-                <Field label="Oxígeno en sangre (%)" help="Clip en el dedo. Normal: 95 a 100. Si está bajo 94, avise.">
+                <Field label="Oxígeno en sangre (%)" help="Clip en el dedo. Normal: 95 a 100. Si está bajo 94, avise."
+                  ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
                   <input required type="number" min="50" max="100" value={form.spo2} onChange={(e) => setField("spo2", e.target.value)} />
                 </Field>
-                <Field label="Latidos por minuto" help="Pulso. En un adulto tranquilo suele ser 60 a 100.">
+                <Field label="Latidos por minuto" help="Pulso. En un adulto tranquilo suele ser 60 a 100."
+                  ask="Frecuencia cardiaca (latidos por minuto)" value={form.heartRate} context={caseContext} estimated={form.estimatedFields.includes("heartRate")}>
                   <input required type="number" min="20" max="220" value={form.heartRate} onChange={(e) => setField("heartRate", e.target.value)} />
                 </Field>
-                <Field label="Presión: número de arriba" help="El mayor del tensiómetro (sistólica). Ejemplo: en 120/80, este es 120.">
+                <Field label="Presión: número de arriba" help="El mayor del tensiómetro (sistólica). Ejemplo: en 120/80, este es 120."
+                  ask="Presión arterial sistólica (mmHg)" value={form.systolic} context={caseContext} estimated={form.estimatedFields.includes("systolic")}>
                   <input required type="number" min="50" max="250" value={form.systolic} onChange={(e) => setField("systolic", e.target.value)} />
                 </Field>
-                <Field label="Presión: número de abajo" help="El menor (diastólica). En 120/80, este es 80.">
+                <Field label="Presión: número de abajo" help="El menor (diastólica). En 120/80, este es 80."
+                  ask="Presión arterial diastólica (mmHg)" value={form.diastolic} context={caseContext} estimated={form.estimatedFields.includes("diastolic")}>
                   <input required type="number" min="20" max="160" value={form.diastolic} onChange={(e) => setField("diastolic", e.target.value)} />
                 </Field>
-                <Field label="Temperatura (°C)" help="En la frente o axila. Un adulto suele estar cerca de 36.5 a 37.2.">
+                <Field label="Temperatura (°C)" help="En la frente o axila. Un adulto suele estar cerca de 36.5 a 37.2."
+                  ask="Temperatura corporal (°C)" value={form.temperature} context={caseContext} estimated={form.estimatedFields.includes("temperature")}>
                   <input required type="number" step="0.1" min="32" max="43" value={form.temperature} onChange={(e) => setField("temperature", e.target.value)} />
                 </Field>
-                <Field label="Respiraciones en un minuto" help="Cuente pechos que suben en 60 segundos. En reposo: más o menos 12 a 20.">
+                <Field label="Respiraciones en un minuto" help="Cuente pechos que suben en 60 segundos. En reposo: más o menos 12 a 20."
+                  ask="Frecuencia respiratoria (respiraciones por minuto)" value={form.respiratoryRate} context={caseContext} estimated={form.estimatedFields.includes("respiratoryRate")}>
                   <input required type="number" min="4" max="50" value={form.respiratoryRate} onChange={(e) => setField("respiratoryRate", e.target.value)} />
+                </Field>
+              </div>
+              <h3>Otros datos (si los tiene)</h3>
+              <p className="sub">No son obligatorios. Si no sabe qué son, toque el signo de pregunta y la IA se lo explica.</p>
+              <div className="g3">
+                <Field label="Glucosa / azúcar (mg/dL)" help="Glucómetro de dedo. Útil en diabéticos, desmayos o confusión."
+                  ask="Glucosa en sangre (glucometría, mg/dL)" value={form.glucose} context={caseContext}>
+                  <input type="number" min="10" max="1500" value={form.glucose} onChange={(e) => setField("glucose", e.target.value)} />
+                </Field>
+                <Field label="Dolor de 0 a 10" help="Pregunte: de 0 (nada) a 10 (el peor dolor de su vida)."
+                  ask="Escala de dolor de 0 a 10" value={form.painScale} context={caseContext}>
+                  <input type="number" min="0" max="10" value={form.painScale} onChange={(e) => setField("painScale", e.target.value)} />
+                </Field>
+                <Field label="Cómo está de conciencia" help="Escala AVPU: si no está alerta, el riesgo sube mucho."
+                  ask="Estado de conciencia (escala AVPU)" value={form.consciousness} context={caseContext}>
+                  <select value={form.consciousness} onChange={(e) => setField("consciousness", e.target.value)}>
+                    {AVPU.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
                 </Field>
               </div>
               <h3>¿Ya tenía alguna de estas enfermedades?</h3>
@@ -500,7 +561,10 @@ export default function App() {
                 <p>{result.explanation.whyQueue}</p>
                 <p>{waitSummary(result.score, waiting).text} Porcentaje de espera: {waitSharePercent(result.score)}% (un caso leve ≈ 100%, un caso crítico ≈ 2%).</p>
               </div>
+              <DestinationCard patient={result} />
             </div>
+            <EstimatedWarning fields={result.estimatedFields} />
+            <Recommendations patient={result} />
             <div className="split">
               <div className="sheet">
                 <h3>Dataset del hospital</h3>
@@ -512,7 +576,7 @@ export default function App() {
               <div className="sheet">
                 <h3>Criterio de Gemini</h3>
                 {result.iaActive && result.geminiScore != null && <p className="muted">Puntaje que sugiere la IA: {Number(result.geminiScore).toFixed(1)}</p>}
-                {!result.iaActive && <p className="muted">Gemini aún no respondió. Se usó solo el protocolo. Revisa GEMINI_API_KEY en Render.</p>}
+                {!result.iaActive && <p className="muted">Gemini no respondió esta vez (puede estar saturado). Se usó solo el protocolo; puede volver a calcular en un momento.</p>}
                 <ul className="why-list big">
                   {(result.geminiReasons || []).map((r) => <li key={r}>{r}</li>)}
                 </ul>
@@ -545,6 +609,13 @@ export default function App() {
                 <Field label="Presión abajo"><input type="number" value={recheck.diastolic} onChange={(e) => setRecheck({ ...recheck, diastolic: e.target.value, pad: e.target.value })} /></Field>
                 <Field label="Temperatura"><input type="number" step="0.1" value={recheck.temperature} onChange={(e) => setRecheck({ ...recheck, temperature: e.target.value, temp: e.target.value })} /></Field>
                 <Field label="Respiraciones"><input type="number" value={recheck.respiratoryRate} onChange={(e) => setRecheck({ ...recheck, respiratoryRate: e.target.value, fr: e.target.value })} /></Field>
+                <Field label="Glucosa (mg/dL)"><input type="number" min="10" max="1500" value={recheck.glucose ?? ""} onChange={(e) => setRecheck({ ...recheck, glucose: e.target.value })} /></Field>
+                <Field label="Dolor 0 a 10"><input type="number" min="0" max="10" value={recheck.painScale ?? ""} onChange={(e) => setRecheck({ ...recheck, painScale: e.target.value })} /></Field>
+                <Field label="Conciencia">
+                  <select value={recheck.consciousness || ""} onChange={(e) => setRecheck({ ...recheck, consciousness: e.target.value })}>
+                    {AVPU.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
+                </Field>
               </div>
               <button className="btn" type="submit">Recalcular y reordenar</button>
             </form>
@@ -557,7 +628,7 @@ export default function App() {
             <div className="sheet table-wrap">
               {filtered.length === 0 && <p className="muted">No hay registros todavía.</p>}
               <table>
-                <thead><tr><th>Persona</th><th>Qué le pasa</th><th>Puntaje</th><th>Prioridad</th><th>Estado</th></tr></thead>
+                <thead><tr><th>Persona</th><th>Qué le pasa</th><th>Puntaje</th><th>Prioridad</th><th>Área</th><th>Estado</th></tr></thead>
                 <tbody>
                   {filtered.sort(comparePriority).map((p) => (
                     <tr key={p.id}>
@@ -565,6 +636,7 @@ export default function App() {
                       <td>{conditionLabel(p.conditionId)}</td>
                       <td>{Number(p.score).toFixed(1)}</td>
                       <td><Chip priority={p.priority} /></td>
+                      <td>{p.destinationArea || "—"}{p.destinationCode && <div className="muted">{p.destinationCode}</div>}</td>
                       <td>{p.status}</td>
                     </tr>
                   ))}
@@ -573,6 +645,8 @@ export default function App() {
             </div>
           </section>
         )}
+
+        {view === "stats" && <StatsView conditionLabel={conditionLabel} />}
 
         {view === "history" && (
           <section className="page">
@@ -620,6 +694,8 @@ export default function App() {
                   <li>Sale un puntaje de 0 (más estable) a 100 (más grave).</li>
                   <li>La lista se ordena del puntaje más alto al más bajo. Si empatan, gana quien llegó antes.</li>
                   <li>Si se vuelven a tomar los signos y empeoran, el puntaje sube y puede adelantar.</li>
+                  <li>La conciencia (AVPU) suma en NEWS2. Si no responde o solo responde al dolor, sube a crítica. La glucosa por debajo de 54 o por encima de 600 también sube el piso.</li>
+                  <li>Según el nivel se elige el área: reanimación, urgencias críticas, urgencias generales, consulta prioritaria o consulta externa. El dolor de pecho, el derrame, el trauma o la sepsis activan su código, y a los menores de 14 se les marca pediatría.</li>
                 </ol>
               </div>
             </div>
@@ -635,6 +711,9 @@ export default function App() {
                 <li>Si el oxígeno, la presión o la respiración están muy mal, el sistema sube el puntaje a propósito.</li>
                 <li>Los pacientes de la sala salen de la base PostgreSQL (Supabase). No se muestran nombres inventados.</li>
                 <li>La IA no decide sola: el protocolo de signos vitales manda. Un clínico confirma.</li>
+                <li>Si la IA estima un signo vital que nadie midió, queda marcado como estimado en el ingreso, en la cola y en la base. Hay que medirlo y recalcular.</li>
+                <li>Las fotos solo se envían a la IA para el análisis. No se guardan en la base; solo se guarda lo que la IA describió.</li>
+                <li>La pantalla pública de la sala no muestra nombres: solo iniciales y los últimos 3 números del documento.</li>
               </ul>
             </div>
           </section>

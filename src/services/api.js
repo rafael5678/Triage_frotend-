@@ -16,7 +16,7 @@ async function request(base, path, options = {}, timeoutMs = 60000) {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || "Error de API");
+      throw new Error(err.error || err.message || "Error de API");
     }
     if (res.status === 204) return null;
     const text = await res.text();
@@ -37,40 +37,45 @@ const STATUS = {
   CANCELADO: "Cancelado",
 };
 
+function list(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function historyToIds(history) {
+  if (!history) return [];
+  return String(history).split(",").map((s) => s.trim()).filter(Boolean);
+}
+
 export function mapFromApi(row) {
   const score = Number(row.riskScore ?? row.scoreRiesgo ?? 0);
   const arrivedAt = (row.evaluatedAt || row.evaluadoEn) ? new Date(row.evaluatedAt || row.evaluadoEn).getTime() : Date.now();
   const statusCode = row.status || row.estado;
-  const heartRate = row.heartRate ?? row.frecuenciaCardiaca;
-  const systolic = row.systolic ?? row.presionSistolica;
-  const diastolic = row.diastolic ?? row.presionDiastolica;
-  const temperature = row.temperature ?? row.temperatura;
-  const respiratoryRate = row.respiratoryRate ?? row.frecuenciaRespiratoria;
-  const age = row.age ?? row.edad;
-  const name = row.name || row.nombre;
-  const document = row.document || row.documento;
-  const conditionId = row.conditionId || row.lesionId;
+  const history = row.history || row.antecedentes || "";
   return {
     id: row.patientId || row.pacienteId,
-    name,
-    document,
-    age,
+    name: row.name || row.nombre,
+    document: row.document || row.documento,
+    age: row.age ?? row.edad,
     sex: row.sex || row.sexo || "M",
-    conditionId,
+    conditionId: row.conditionId || row.lesionId,
     reason: row.reason || row.motivo || "",
-    history: row.history || row.antecedentes || "",
+    history,
     spo2: row.spo2,
-    heartRate,
-    systolic,
-    diastolic,
-    temperature,
-    respiratoryRate,
+    heartRate: row.heartRate ?? row.frecuenciaCardiaca,
+    systolic: row.systolic ?? row.presionSistolica,
+    diastolic: row.diastolic ?? row.presionDiastolica,
+    temperature: row.temperature ?? row.temperatura,
+    respiratoryRate: row.respiratoryRate ?? row.frecuenciaRespiratoria,
+    glucose: row.glucose ?? row.glucosa ?? null,
+    painScale: row.painScale ?? row.dolor ?? null,
+    consciousness: row.consciousness || row.conciencia || "",
     score,
     news2: row.news2,
+    triageLevel: row.triageLevel,
     priority: priorityFromScore(score),
     status: STATUS[statusCode] || statusCode || "En espera",
     arrivedAt,
-    comorbidityIds: [],
+    comorbidityIds: historyToIds(history),
     scoreSource: row.scoreSource || row.fuenteScore,
     iaActive: Boolean(row.aiActive ?? row.iaActiva),
     dangerLead: row.dangerLead,
@@ -80,12 +85,23 @@ export function mapFromApi(row) {
     geminiReasons: row.geminiReasons || row.razonesGemini || [],
     protocolScore: row.protocolScore ?? row.scoreProtocolo,
     geminiScore: row.geminiScore ?? row.scoreGemini,
+    immediateActions: list(row.immediateActions),
+    testsToOrder: list(row.testsToOrder),
+    monitoring: list(row.monitoring),
+    redFlags: list(row.redFlags),
+    symptomExplanation: row.symptomExplanation || "",
+    photoFindings: row.photoFindings || "",
+    destinationArea: row.destinationArea || "",
+    destinationCode: row.destinationCode || "",
+    destinationReason: row.destinationReason || "",
+    maxWaitMinutes: row.maxWaitMinutes ?? null,
+    estimatedFields: list(row.estimatedFields),
   };
 }
 
 export async function fetchPatients() {
-  const list = await request(QUEUE_URL, "/api/v1/triage/patients", {}, 60000);
-  return list.map(mapFromApi);
+  const rows = await request(QUEUE_URL, "/api/v1/triage/patients");
+  return rows.map(mapFromApi);
 }
 
 function intakeBody(form) {
@@ -101,7 +117,13 @@ function intakeBody(form) {
   };
 }
 
-function vitalsBody(form, patientId) {
+function optionalNumber(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function vitalsBody(form, patientId, { withPhoto = true } = {}) {
   const body = {
     heartRate: Number(form.heartRate ?? form.fc),
     spo2: Number(form.spo2),
@@ -109,7 +131,15 @@ function vitalsBody(form, patientId) {
     diastolic: Number(form.diastolic ?? form.pad),
     temperature: Number(form.temperature ?? form.temp),
     respiratoryRate: Number(form.respiratoryRate ?? form.fr),
+    glucose: optionalNumber(form.glucose),
+    painScale: optionalNumber(form.painScale),
+    consciousness: form.consciousness || null,
+    estimatedFields: form.estimatedFields || [],
   };
+  if (withPhoto && form.photo?.dataUrl) {
+    body.photoBase64 = form.photo.dataUrl;
+    body.photoMime = form.photo.mime;
+  }
   if (patientId) body.patientId = patientId;
   return body;
 }
@@ -118,11 +148,11 @@ export async function registerAndScore(form) {
   const created = await request(AUTH_URL, "/api/v1/triage/patients", {
     method: "POST",
     body: JSON.stringify(intakeBody(form)),
-  }, 60000);
+  });
   const scored = await request(EVAL_URL, "/api/v1/triage/evaluations", {
     method: "POST",
     body: JSON.stringify(vitalsBody(form, created.patientId || created.pacienteId || created.id)),
-  }, 60000);
+  }, 90000);
   return mapFromApi(scored);
 }
 
@@ -134,15 +164,15 @@ export async function analyzeTriage(form, localModelScore) {
       ...vitalsBody(form),
       localModelScore: localModelScore == null ? null : Number(localModelScore),
     }),
-  }, 60000);
+  }, 90000);
   return mapFromApi(scored);
 }
 
 export async function reevaluatePatient(id, form) {
   const scored = await request(EVAL_URL, `/api/v1/triage/evaluations/${id}/reassess`, {
     method: "PUT",
-    body: JSON.stringify(vitalsBody(form)),
-  }, 60000);
+    body: JSON.stringify(vitalsBody(form, null, { withPhoto: false })),
+  }, 90000);
   return mapFromApi(scored);
 }
 
@@ -157,7 +187,36 @@ export async function login(credentials) {
       username: credentials.username,
       password: credentials.password,
     }),
-  }, 60000);
+  });
+}
+
+/** La IA convierte el relato (y la foto) en el formulario. known son los datos que ya escribió el personal. */
+export async function intakeWithAi({ story, photo, known, comorbidityOptions }) {
+  return request(AI_URL, "/api/v1/ia/intake", {
+    method: "POST",
+    body: JSON.stringify({
+      story,
+      photoBase64: photo?.dataUrl || null,
+      photoMime: photo?.mime || null,
+      known,
+      comorbidityOptions,
+    }),
+  }, 90000);
+}
+
+export async function explainField(field, value, context) {
+  return request(AI_URL, "/api/v1/ia/explain", {
+    method: "POST",
+    body: JSON.stringify({ field, value: value === "" || value == null ? null : String(value), context }),
+  });
+}
+
+export async function fetchStats() {
+  return request(QUEUE_URL, "/api/v1/triage/stats");
+}
+
+export async function fetchBoard() {
+  return request(QUEUE_URL, "/api/v1/triage/board");
 }
 
 export async function fetchSymptoms() {

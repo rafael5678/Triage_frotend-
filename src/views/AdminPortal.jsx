@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createUser, fetchAdminSymptoms, fetchAdminUsers, fetchPatients, saveSymptom, setUserActive } from "../services/api";
 import { comparePriority } from "../models/patient";
+import StatsView from "./StatsView";
 
 function Logo() {
   return (
@@ -108,6 +109,8 @@ export default function AdminPortal({ user, onLogout }) {
           <button className={tab === "symptoms" ? "on" : ""} onClick={() => setTab("symptoms")}>Síntomas / celdas</button>
           <button className={tab === "users" ? "on" : ""} onClick={() => setTab("users")}>Cuentas de acceso</button>
           <button className={tab === "patients" ? "on" : ""} onClick={() => setTab("patients")}>Pacientes en sala</button>
+          <button className={tab === "stats" ? "on" : ""} onClick={() => setTab("stats")}>Estadísticas</button>
+          <a className="side-link" href="#/sala" target="_blank" rel="noreferrer">Pantalla de sala</a>
         </nav>
         <div className="me">
           <span className="ava">AD</span>
@@ -224,6 +227,10 @@ export default function AdminPortal({ user, onLogout }) {
               </table>
             </div>
           </section>
+        )}
+
+        {tab === "stats" && (
+          <StatsView conditionLabel={(id) => symptoms.find((s) => s.id === id)?.label || id} />
         )}
 
         {tab === "patients" && (
