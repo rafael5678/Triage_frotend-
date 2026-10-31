@@ -37,20 +37,6 @@ function clock(patient) {
   return new Date(at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
 }
 
-const PUBLIC_APP = "https://clasificador-predictivo-e.vercel.app";
-
-export function arrivalLink(patient) {
-  const id = patient?.id || patient?.patientId || patient?.pacienteId;
-  if (!id) return "";
-  return `${PUBLIC_APP}/llegue/${id}`;
-}
-
-function checkinBlock(patient) {
-  const link = arrivalLink(patient);
-  if (!link) return "";
-  return `\n\nCuando llegue a la sala, toque este enlace para avisar que ya está:\n${link}`;
-}
-
 /** Mismo texto que manda el aviso automático del servidor. */
 export function noticeMessage(patient, position, now = Date.now()) {
   const name = firstName(patient.name);
@@ -59,15 +45,12 @@ export function noticeMessage(patient, position, now = Date.now()) {
   const { left, max } = waitInfo(patient, now);
   const place = position ?? patient.queuePosition ?? "—";
   const when = clock(patient);
-  const checkin = checkinBlock(patient);
   if (patient.present === false) {
     return `Hola ${name}, su turno es ${ticket} en ${area} (puesto ${place}). Aún no registramos su llegada. `
-      + `Preséntese en los próximos ${Math.max(5, left)} minutos y mire la pantalla: cuando salga ${ticket} pase a ${area}.`
-      + checkin;
+      + `Preséntese en los próximos ${Math.max(5, left)} minutos y mire la pantalla: cuando salga ${ticket} pase a ${area}.`;
   }
   return `Hola ${name}, su turno es ${ticket} en ${area} (puesto ${place}, meta ${max} min${when ? `, llegó ${when}` : ""}). `
-    + `Permanezca en la sala de espera y mire la pantalla: cuando salga ${ticket} pase a ${area}.`
-    + checkin;
+    + `Permanezca en la sala de espera y mire la pantalla: cuando salga ${ticket} pase a ${area}.`;
 }
 
 export const WHATSAPP_HINT = "Use un celular colombiano de 10 dígitos que empiece por 3 (ejemplo 300 123 4567).";

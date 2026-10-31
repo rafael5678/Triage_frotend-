@@ -10,7 +10,7 @@ import {
 import { CARE_TARGETS, estimateWaitMinutes, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
 import { AVPU } from "../models/levels";
-import { arrivalLink, isValidWhatsApp, minutesLabel, noticeDue, phoneError, waitInfo, whatsappLink } from "../models/notice";
+import { isValidWhatsApp, minutesLabel, noticeDue, phoneError, waitInfo, whatsappLink } from "../models/notice";
 import { crashWarning, fillRestingIfEmpty, invertedPressure, vitalHint } from "../models/vitals";
 import AdminPortal from "./AdminPortal";
 import AiIntake from "./AiIntake";
@@ -459,7 +459,7 @@ export default function App() {
           <div className="glass glass-wide">
             <span>Cuánto se espera, según qué tan grave esté</span>
             <p className="glass-lead">
-              El puntaje va de 0 a 100: <b>más alto = más grave</b>. 62 es Alta; 8 es Mínima.
+              El puntaje va de 0 a 100: <b>más alto = más grave</b>. 78 Crítica, 62 Alta, 42 Media, 22 Baja, 8 Mínima.
               La barra es la espera en minutos (un caso leve puede esperar más).
             </p>
             <ul className="wait-bands">
@@ -627,11 +627,8 @@ export default function App() {
                             </button>
                           ) : <small className="muted">Sin celular: no se le puede avisar.</small>}
                         </div>
-                        {selected.phone && arrivalLink(selected) && (
-                          <p className="muted">
-                            El WhatsApp lleva este enlace para que el paciente avise que ya llegó:{" "}
-                            <a href={arrivalLink(selected)} target="_blank" rel="noreferrer">{arrivalLink(selected)}</a>
-                          </p>
+                        {selected.present === false && (
+                          <p className="muted">Cuando lo vean en la sala, toquen «Ya llegó a la sala».</p>
                         )}
                       </div>
                     )}
@@ -788,7 +785,7 @@ export default function App() {
             <h1>Por qué salió este puntaje</h1>
             <p className="sub">
               El puntaje es de gravedad: <b>100 es lo más urgente, 0 es lo más leve</b>.
-              62 es Alta; 8 es Mínima. No está al revés. Gemini no puede bajar un caso grave.
+              78 es Crítica, 62 Alta, 42 Media, 22 Baja, 8 Mínima. No está al revés. Gemini no puede bajar un caso grave.
             </p>
             {crashWarning(result) && <p className="warn-line">{crashWarning(result)}</p>}
             <div className={`banner ${result.priority.tone}`}>

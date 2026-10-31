@@ -62,7 +62,14 @@ export function predictScore(model, row) {
   const rr = Number(row.respiratoryRate ?? row.fr);
   const hr = Number(row.heartRate ?? row.fc);
   const dbp = Number(row.diastolic ?? row.pad);
-  if (spo2 < 85 || sbp < 80 || rr < 8 || hr > 150 || hr < 40) p = Math.max(p, 86);
+  let red = 0;
+  if (spo2 < 85) red++;
+  if (sbp < 80) red++;
+  if (rr < 8) red++;
+  if (hr > 150 || hr < 40) red++;
+  if (red >= 1) p = Math.max(p, 86);
+  if (red >= 2) p = Math.max(p, 92);
+  if (red >= 3) p = Math.max(p, 97);
   if (spo2 <= 89) p = Math.max(p, 62);
   else if (spo2 <= 91) p = Math.max(p, 42);
   else if (spo2 < 95) p = Math.max(p, 22);
