@@ -8,15 +8,20 @@ const AI_URL = import.meta.env.VITE_AI_URL || (import.meta.env.DEV ? "http://loc
 async function request(base, path, options = {}, timeoutMs = 60000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const hasBody = options.body != null && options.body !== "";
   try {
     const res = await fetch(`${base}${path}`, {
-      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
       ...options,
+      headers: {
+        ...(hasBody ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers || {}),
+      },
       signal: ctrl.signal,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || err.message || err.detail || `Error ${res.status}`);
+      const fields = err.fields ? Object.entries(err.fields).map(([k, v]) => `${k}: ${v}`).join("; ") : "";
+      throw new Error(err.error || err.message || err.detail || fields || `Error ${res.status}`);
     }
     if (res.status === 204) return null;
     const text = await res.text();
@@ -24,6 +29,9 @@ async function request(base, path, options = {}, timeoutMs = 60000) {
     return JSON.parse(text);
   } catch (error) {
     if (error.name === "AbortError") throw new Error("El servidor tardó demasiado en responder (puede estar despertando).");
+    if (error instanceof TypeError) {
+      throw new Error("No se pudo conectar con el servidor. Revisa la red o espera a que Azure despierte e inténtalo de nuevo.");
+    }
     throw error;
   } finally {
     clearTimeout(timer);
