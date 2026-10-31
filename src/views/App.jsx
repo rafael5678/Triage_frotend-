@@ -824,8 +824,12 @@ export default function App() {
               <h3>Avisar el turno por WhatsApp</h3>
               <p className="muted">Celular colombiano real. Al confirmar se abre WhatsApp con el turno {result.ticket || ticketCode(result)}, el puesto y el área.</p>
               <Field label="Celular">
-                <input type="tel" inputMode="tel" maxLength={20} placeholder="300 123 4567" value={result.phone || ""} onChange={(e) => setResult({ ...result, phone: e.target.value })} />
+                <input type="tel" inputMode="tel" maxLength={20} placeholder="318 668 0042" value={result.phone || ""} onChange={(e) => {
+                  setConfirmError("");
+                  setResult({ ...result, phone: e.target.value });
+                }} />
               </Field>
+              {isValidWhatsApp(result.phone) && <p className="hint">Este celular sí sirve. Al confirmar se abre WhatsApp con el turno.</p>}
               {phoneError(result.phone) && <p className="form-err">{phoneError(result.phone)}</p>}
               {!String(result.phone || "").trim() && <p className="warn-line">Sin un celular válido no le llega el mensaje. Puede confirmar igual y avisar después.</p>}
             </div>

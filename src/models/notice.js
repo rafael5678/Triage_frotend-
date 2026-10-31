@@ -53,35 +53,33 @@ export function noticeMessage(patient, position, now = Date.now()) {
     + `Permanezca en la sala de espera y mire la pantalla: cuando salga ${ticket} pase a ${area}.`;
 }
 
-const MOBILE_PREFIX = new Set([
-  "300", "301", "302", "303", "304", "305",
-  "310", "311", "312", "313", "314", "315", "316", "317", "318", "319",
-  "320", "321", "322", "323", "324", "333",
-  "350", "351", "352", "353",
-]);
-
-export const WHATSAPP_HINT = "Use un celular colombiano de 10 dígitos que empiece por 3 (ejemplo 300 123 4567). No se aceptan números inventados.";
+export const WHATSAPP_HINT = "Use un celular colombiano de 10 dígitos que empiece por 3 (ejemplo 300 123 4567).";
 
 function localTen(raw) {
   let digits = String(raw || "").replace(/\D/g, "");
-  if (digits.startsWith("57") && digits.length === 12) digits = digits.slice(2);
-  return digits;
+  if (digits.startsWith("57") && digits.length >= 12) digits = digits.slice(2);
+  return digits.slice(0, 10);
 }
 
 export function isValidWhatsApp(raw) {
   if (!String(raw || "").trim()) return false;
   const ten = localTen(raw);
-  if (ten.length !== 10 || !ten.startsWith("3")) return false;
-  if (!MOBILE_PREFIX.has(ten.slice(0, 3))) return false;
-  if (new Set(ten).size <= 2) return false;
-  if (/^3\d0{8}$/.test(ten)) return false;
-  if (new Set(ten.slice(3)).size <= 1) return false;
+  // En Colombia el móvil es 3 + 9 dígitos (300, 310, 312, 315, 316, 318, 320, 350…).
+  if (ten.length !== 10 || !/^3[0-5]/.test(ten)) return false;
+  if (/^(\d)\1{9}$/.test(ten)) return false;
   return true;
 }
 
 export function phoneError(raw) {
-  if (!String(raw || "").trim()) return "";
-  return isValidWhatsApp(raw) ? "" : WHATSAPP_HINT;
+  const typed = String(raw || "").trim();
+  if (!typed) return "";
+  const digits = String(raw || "").replace(/\D/g, "");
+  const ten = localTen(raw);
+  if (digits.replace(/^57/, "").length < 10) {
+    return `Lleva ${ten.length} de 10 dígitos. Ejemplo: 318 668 0042.`;
+  }
+  if (!isValidWhatsApp(raw)) return WHATSAPP_HINT;
+  return "";
 }
 
 /** Celular colombiano válido → 57 + 10 dígitos. */
