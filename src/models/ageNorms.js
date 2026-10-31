@@ -1,105 +1,77 @@
 /**
- * Qué es “normal” según la edad, en reposo.
- * Un bebé con 140 latidos está bien; un joven de 20 no.
+ * Reposo según la edad. El oxígeno casi no cambia (95–100 a cualquier edad);
+ * pulso, presión y respiración sí.
  */
-export function ageNorms(age) {
-  const n = Number(age);
-  if (!Number.isFinite(n) || n >= 16 && n < 40) {
-    return {
-      label: n >= 16 && n < 40 ? `${n} años (adulto joven)` : "adulto joven",
-      hr: [60, 100],
-      rr: [12, 20],
-      sbp: [90, 130],
-      dbp: [60, 85],
-      spo2: [95, 100],
-      temp: [36.1, 37.2],
-      rest: { spo2: 97, heartRate: 72, systolic: 118, diastolic: 76, temperature: 36.6, respiratoryRate: 16 },
-    };
-  }
-  if (n < 1) {
-    return {
-      label: "menor de 1 año",
-      hr: [100, 160],
-      rr: [30, 60],
-      sbp: [70, 100],
-      dbp: [40, 70],
-      spo2: [95, 100],
-      temp: [36.5, 37.5],
-      rest: { spo2: 98, heartRate: 130, systolic: 85, diastolic: 50, temperature: 37.0, respiratoryRate: 40 },
-    };
-  }
-  if (n < 4) {
-    return {
-      label: `${n} años (niño pequeño)`,
-      hr: [90, 150],
-      rr: [24, 40],
-      sbp: [75, 110],
-      dbp: [45, 75],
-      spo2: [95, 100],
-      temp: [36.4, 37.5],
-      rest: { spo2: 98, heartRate: 110, systolic: 95, diastolic: 60, temperature: 36.8, respiratoryRate: 28 },
-    };
-  }
-  if (n < 6) {
-    return {
-      label: `${n} años`,
-      hr: [80, 140],
-      rr: [22, 34],
-      sbp: [80, 115],
-      dbp: [50, 75],
-      spo2: [95, 100],
-      temp: [36.3, 37.4],
-      rest: { spo2: 98, heartRate: 100, systolic: 100, diastolic: 62, temperature: 36.7, respiratoryRate: 24 },
-    };
-  }
-  if (n < 12) {
-    return {
-      label: `${n} años`,
-      hr: [70, 120],
-      rr: [18, 30],
-      sbp: [85, 120],
-      dbp: [50, 80],
-      spo2: [95, 100],
-      temp: [36.2, 37.3],
-      rest: { spo2: 98, heartRate: 90, systolic: 105, diastolic: 65, temperature: 36.6, respiratoryRate: 22 },
-    };
-  }
-  if (n < 16) {
-    return {
-      label: `${n} años (adolescente)`,
-      hr: [60, 110],
-      rr: [12, 24],
-      sbp: [90, 125],
-      dbp: [55, 80],
-      spo2: [95, 100],
-      temp: [36.1, 37.2],
-      rest: { spo2: 97, heartRate: 80, systolic: 112, diastolic: 70, temperature: 36.6, respiratoryRate: 18 },
-    };
-  }
-  if (n >= 65) {
-    return {
-      label: `${n} años (adulto mayor)`,
-      hr: [60, 90],
-      rr: [12, 20],
-      sbp: [100, 150],
-      dbp: [60, 90],
-      spo2: [95, 100],
-      temp: [36.0, 37.2],
-      rest: { spo2: 96, heartRate: 70, systolic: 128, diastolic: 78, temperature: 36.5, respiratoryRate: 16 },
-    };
-  }
+function band(label, hr, rr, sbp, dbp, restHr, restSbp, restDbp, restRr, restSpo2 = 97) {
   return {
-    label: `${n} años`,
-    hr: [60, 100],
-    rr: [12, 20],
-    sbp: [90, 140],
-    dbp: [60, 90],
+    label,
+    hr,
+    rr,
+    sbp,
+    dbp,
     spo2: [95, 100],
     temp: [36.1, 37.2],
-    rest: { spo2: 97, heartRate: 74, systolic: 122, diastolic: 78, temperature: 36.6, respiratoryRate: 16 },
+    rest: {
+      spo2: restSpo2,
+      heartRate: restHr,
+      systolic: restSbp,
+      diastolic: restDbp,
+      temperature: 36.6,
+      respiratoryRate: restRr,
+    },
   };
+}
+
+export function ageNorms(age) {
+  const n = Number(age);
+  if (!Number.isFinite(n)) {
+    return band("adulto joven (ponga la edad)", [60, 100], [12, 20], [90, 120], [60, 80], 72, 118, 76, 16);
+  }
+  if (n < 1) {
+    return band("menor de 1 año", [100, 160], [30, 60], [70, 100], [40, 70], 130, 85, 50, 40, 98);
+  }
+  if (n < 4) {
+    return band(`${n} años (niño pequeño)`, [90, 150], [24, 40], [75, 110], [45, 75], 110, 95, 60, 28, 98);
+  }
+  if (n < 6) {
+    return band(`${n} años`, [80, 140], [22, 34], [80, 115], [50, 75], 100, 100, 62, 24, 98);
+  }
+  if (n < 12) {
+    return band(`${n} años`, [70, 120], [18, 30], [85, 120], [50, 80], 90, 105, 65, 22, 98);
+  }
+  if (n < 16) {
+    return band(`${n} años (adolescente)`, [60, 110], [12, 24], [90, 125], [55, 80], 80, 112, 70, 18);
+  }
+  // 16–29 ≈ veinte años: corazón más rápido en reposo que un mayor, presión más baja.
+  if (n < 30) {
+    return band(`${n} años (joven)`, [60, 100], [12, 20], [90, 120], [60, 80], 72, 116, 74, 16);
+  }
+  // ~40 años
+  if (n < 45) {
+    return band(`${n} años`, [60, 100], [12, 20], [95, 130], [60, 85], 72, 120, 76, 16);
+  }
+  // ~50 años: la presión de reposo suele ir un poco más arriba.
+  if (n < 60) {
+    return band(`${n} años`, [60, 95], [12, 20], [100, 135], [65, 85], 70, 124, 78, 16);
+  }
+  // ~60–69
+  if (n < 70) {
+    return band(`${n} años`, [60, 90], [12, 22], [100, 145], [65, 90], 68, 128, 78, 16, 96);
+  }
+  // 70+
+  return band(`${n} años (adulto mayor)`, [55, 90], [12, 22], [100, 150], [60, 90], 66, 130, 78, 16, 96);
 }
 
 export function rangeText(pair, unit = "") {
   return `${pair[0]} a ${pair[1]}${unit ? ` ${unit}` : ""}`;
+}
+
+/** Oxígeno: 95–100 bien; 92–94 un poco bajo; 90–91 ya no es normal; 89 o menos crítico. */
+export function oxygenWord(value) {
+  const v = Number(value);
+  if (!Number.isFinite(v)) return { badge: "", ok: true, detail: "" };
+  if (v >= 95) return { badge: "bien", ok: true, detail: "95 a 100 es lo normal a cualquier edad." };
+  if (v >= 92) return { badge: "un poco bajo", ok: false, detail: "Ya bajó de 95. Hay que repetir el clip y vigilar." };
+  if (v >= 90) return { badge: "bajo · ya no es normal", ok: false, detail: "91 o menos no es normal. El puntaje sube." };
+  return { badge: "crítico", ok: false, detail: "89 o menos: el cuerpo está recibiendo poco oxígeno. Eso es urgente." };
 }

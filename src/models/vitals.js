@@ -1,4 +1,4 @@
-import { ageNorms, rangeText } from "./ageNorms";
+import { ageNorms, oxygenWord, rangeText } from "./ageNorms";
 
 function num(raw) {
   if (raw === "" || raw == null) return null;
@@ -20,10 +20,11 @@ function itemsFor(age) {
       how: "Clip del dedo (oxímetro).",
       normal: rangeText(n.spo2, "%") + ` a los ${n.label}`,
       pair: n.spo2,
-      bad: (v) => (v < 90 ? "muy bajo" : v < n.spo2[0] ? "bajo" : "bien"),
-      why: (v) => v < n.spo2[0]
-        ? `Salió ${v}%. A los ${n.label} lo normal es ${rangeText(n.spo2, "%")}. Por debajo de eso el puntaje sube.`
-        : `Salió ${v}%. En rango para ${n.label}.`,
+      bad: (v) => oxygenWord(v).badge,
+      why: (v) => {
+        const o = oxygenWord(v);
+        return `Salió ${v}% a los ${n.label}. ${o.detail}`;
+      },
     },
     {
       key: "heartRate",
