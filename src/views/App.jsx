@@ -10,7 +10,7 @@ import {
 import { CARE_TARGETS, estimateWaitMinutes, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
 import { AVPU } from "../models/levels";
-import { isValidWhatsApp, minutesLabel, noticeDue, phoneError, waitInfo, whatsappLink } from "../models/notice";
+import { arrivalLink, isValidWhatsApp, minutesLabel, noticeDue, phoneError, waitInfo, whatsappLink } from "../models/notice";
 import { crashWarning, fillRestingIfEmpty, invertedPressure, vitalHint } from "../models/vitals";
 import AdminPortal from "./AdminPortal";
 import AiIntake from "./AiIntake";
@@ -627,6 +627,12 @@ export default function App() {
                             </button>
                           ) : <small className="muted">Sin celular: no se le puede avisar.</small>}
                         </div>
+                        {selected.phone && arrivalLink(selected) && (
+                          <p className="muted">
+                            El WhatsApp lleva este enlace para que el paciente avise que ya llegó:{" "}
+                            <a href={arrivalLink(selected)} target="_blank" rel="noreferrer">{arrivalLink(selected)}</a>
+                          </p>
+                        )}
                       </div>
                     )}
                     <div className="row-btns">

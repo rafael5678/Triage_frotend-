@@ -1,22 +1,32 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./views/App.jsx";
+import Arrive from "./views/Arrive.jsx";
 import PublicBoard from "./views/PublicBoard.jsx";
 import "./styles.css";
 
-function isBoard() {
-  return window.location.hash.startsWith("#/sala");
+function route() {
+  const path = window.location.pathname;
+  const hash = window.location.hash;
+  if (path.includes("/llegue") || hash.startsWith("#/llegue")) return "arrive";
+  if (hash.startsWith("#/sala")) return "board";
+  return "app";
 }
 
-/** #/sala es la pantalla pública de la sala de espera; el resto es la app del personal. */
 function Root() {
-  const [board, setBoard] = useState(isBoard);
+  const [page, setPage] = useState(route);
   useEffect(() => {
-    const onHash = () => setBoard(isBoard());
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    const onChange = () => setPage(route());
+    window.addEventListener("hashchange", onChange);
+    window.addEventListener("popstate", onChange);
+    return () => {
+      window.removeEventListener("hashchange", onChange);
+      window.removeEventListener("popstate", onChange);
+    };
   }, []);
-  return board ? <PublicBoard /> : <App />;
+  if (page === "arrive") return <Arrive />;
+  if (page === "board") return <PublicBoard />;
+  return <App />;
 }
 
 createRoot(document.getElementById("root")).render(
