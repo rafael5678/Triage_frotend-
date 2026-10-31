@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { intakeWithAi } from "../services/api";
 import { resizePhoto } from "../models/photo";
 import { VITAL_LABELS } from "../models/levels";
+import { RESTING_VITALS } from "../models/vitals";
 
 const FILLABLE = ["age", "sex", "heartRate", "spo2", "systolic", "diastolic", "temperature", "respiratoryRate", "glucose", "painScale", "consciousness"];
 
@@ -95,10 +96,19 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
       if (s.comorbidityIds?.length) {
         patch.comorbidityIds = Array.from(new Set([...(form.comorbidityIds || []), ...s.comorbidityIds]));
       }
+      const next = { ...form, ...patch };
+      Object.entries(RESTING_VITALS).forEach(([key, value]) => {
+        if (isEmpty(next[key]) && isEmpty(patch[key])) {
+          patch[key] = String(value);
+          estimated.add(key);
+        }
+      });
       patch.estimatedFields = Array.from(estimated);
       onApply(patch);
       setNotes({ notes: s.notes || [], photoFindings: s.photoFindings, estimated: patch.estimatedFields });
-      flash("La IA llenó el formulario. Revise cada dato antes de calcular.");
+      flash(estimated.size
+        ? "Gemini llenó el motivo. Los signos de reposo son guía: si puede, póngalos del oxímetro y el tensiómetro."
+        : "Gemini llenó el formulario. Revise cada dato antes de calcular.");
     } catch (e) {
       flash(e.message);
     } finally {

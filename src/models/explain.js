@@ -22,23 +22,8 @@ export function explainWhy(patient) {
     || CONDITIONS.find((c) => c.id === (patient.conditionId || patient.lesionId));
   const news = news2Score(patient);
 
+  const estimated = new Set(patient.estimatedFields || []);
   const reasons = [];
-  if (Array.isArray(patient.iaReasons) && patient.iaReasons.length) {
-    const dangerLead = patient.dangerLead || priority.meaning;
-    return {
-      score,
-      news2: news,
-      priority,
-      dangerLead,
-      headline: `Puntaje ${score} de 100 · ${priority.chip}`,
-      meaning: patient.aiMeaning || patient.meaningIa || priority.meaning,
-      whyQueue: score >= 62
-        ? "Por este puntaje va adelante de quien llegó antes si esa persona está más estable."
-        : "No es el caso más grave de la sala, según estos números.",
-      reasons: patient.iaReasons,
-      iaActive: Boolean(patient.iaActive),
-    };
-  }
   if (spo2 < 90) reasons.push(`El oxígeno en la sangre está muy bajo (${spo2}%). Lo normal es 95 a 100. Eso sube mucho el puntaje.`);
   else if (spo2 < 94) reasons.push(`El oxígeno está un poco bajo (${spo2}%). Lo normal es 95 a 100.`);
   else if (spo2 >= 95) reasons.push(`El oxígeno está en un rango aceptable (${spo2}%).`);
@@ -71,9 +56,17 @@ export function explainWhy(patient) {
   if (temp <= 35) danger.push("el cuerpo está muy frío");
   if (rr >= 25 || rr <= 8) danger.push("no está respirando de forma estable");
 
-  const dangerLead = danger.length
-    ? `Está grave porque ${danger.join(", ")}.`
-    : priority.meaning;
+  const iaReasons = (patient.iaReasons || []).filter(Boolean);
+  const merged = [...reasons];
+  iaReasons.forEach((r) => {
+    if (!merged.includes(r)) merged.push(r);
+  });
+
+  const measuredDanger = danger.length && !estimated.size;
+  const dangerLead = patient.dangerLead
+    || (measuredDanger ? `Está grave porque ${danger.join(", ")}.` : (estimated.size
+      ? "Varios signos no se midieron: el puntaje sigue sobre todo el motivo de consulta, no un shock inventado."
+      : priority.meaning));
 
   return {
     score,
@@ -81,10 +74,11 @@ export function explainWhy(patient) {
     priority,
     dangerLead,
     headline: `Puntaje ${score} de 100 · ${priority.chip}`,
-    meaning: priority.meaning,
+    meaning: patient.aiMeaning || patient.meaningIa || priority.meaning,
     whyQueue: score >= 62
       ? "Por este puntaje va adelante de quien llegó antes si esa persona está más estable."
       : "No es el caso más grave de la sala, según estos números.",
-    reasons,
+    reasons: merged.slice(0, 8),
+    iaActive: Boolean(patient.iaActive),
   };
 }

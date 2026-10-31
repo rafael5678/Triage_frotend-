@@ -1,4 +1,5 @@
 import { VITAL_LABELS } from "../models/levels";
+import { readVitals } from "../models/vitals";
 
 export function DestinationCard({ patient, compact = false }) {
   if (!patient?.destinationArea) return null;
@@ -32,6 +33,30 @@ function Block({ title, items, tone }) {
     <div className={`reco-block ${tone || ""}`}>
       <h4>{title}</h4>
       <ul className="why-list">{items.map((item) => <li key={item}>{item}</li>)}</ul>
+    </div>
+  );
+}
+
+/** Cada signo, en palabras: cómo se toma, qué es normal y por qué movió el puntaje. */
+export function VitalGuide({ patient }) {
+  const rows = readVitals(patient);
+  return (
+    <div className="sheet vital-guide">
+      <h3>Qué significan estos números</h3>
+      <p className="sub">No hace falta ser médico. Lo “normal” es de un adulto en reposo.</p>
+      <ul className="vital-read">
+        {rows.map((row) => (
+          <li key={row.key} className={row.tone}>
+            <div>
+              <b>{row.label}</b>
+              <span className={`badge ${row.tone}`}>{row.badge}</span>
+            </div>
+            <strong>{row.value == null ? "—" : `${row.value}${row.unit ? ` ${row.unit}` : ""}`}</strong>
+            <small>Normal: {row.normal}. {row.how}</small>
+            {row.why && <p>{row.why}{row.estimated ? " Este valor no se midió: es de reposo para poder calcular." : ""}</p>}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
