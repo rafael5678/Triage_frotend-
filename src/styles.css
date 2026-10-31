@@ -151,6 +151,16 @@ h1, h2, .brand strong {
 .q.v { border-left-color: var(--v); }
 .q.sel { outline: 2px solid var(--teal); }
 .q em { font-family: Fraunces, serif; color: var(--muted); }
+.ticket { font-family: Fraunces, serif; letter-spacing: .06em; color: var(--ink); }
+.ticket-xl {
+  font-family: Fraunces, serif; font-size: 28px; letter-spacing: .08em;
+  margin: 4px 0 0; color: var(--teal);
+}
+.elder {
+  display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 800;
+  letter-spacing: .06em; background: #fef3c7; color: #854d0e;
+  border-radius: 999px; padding: 2px 7px; vertical-align: middle;
+}
 .q small, .wait { color: var(--muted); font-size: 12px; }
 .sc b { font-family: Fraunces, serif; }
 .chip {

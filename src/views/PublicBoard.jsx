@@ -86,7 +86,7 @@ export default function PublicBoard() {
         <div>
           <p className="eyebrow">Urgencias · sala de espera</p>
           <h1>Se atiende primero al más grave</h1>
-          <p className="lede">Su turno son las iniciales y los últimos 3 números del documento. El orden puede cambiar.</p>
+          <p className="lede">Su turno son las iniciales y los últimos 3 del documento (ejemplo JC-478). El más grave pasa primero; si empatan, una persona de 65 años o más va delante. El orden puede cambiar.</p>
         </div>
         <div className="board-clock">
           <b>{now.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</b>
@@ -106,6 +106,8 @@ export default function PublicBoard() {
           <small>
             {nextLevel.chip}
             {next.estimatedWaitMinutes === 0 ? " · ya" : ` · ~${next.estimatedWaitMinutes} min`}
+            {next.maxWaitMinutes != null ? ` · meta ${next.maxWaitMinutes} min` : ""}
+            {next.arrivedAt ? ` · llegó ${new Date(next.arrivedAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}` : ""}
             {next.present === false ? " · no está en sala: acérquese a triaje" : ""}
           </small>
         </div>
@@ -133,7 +135,10 @@ export default function PublicBoard() {
                   </span>
                   <span className="board-wait">
                     <b>{r.estimatedWaitMinutes === 0 ? "Ya" : `~${r.estimatedWaitMinutes} min`}</b>
-                    <small>lleva {r.waitedMinutes} min</small>
+                    <small>
+                      lleva {r.waitedMinutes} min
+                      {r.arrivedAt ? ` · llegó ${new Date(r.arrivedAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}` : ""}
+                    </small>
                   </span>
                 </li>
               );

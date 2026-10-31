@@ -99,6 +99,7 @@ export function mapFromApi(row) {
     notifiedAt: time(row.notifiedAt),
     notifiedChannel: row.notifiedChannel || "",
     queuePosition: row.queuePosition ?? null,
+    ticket: row.ticket || "",
     comorbidityIds: historyToIds(history),
     scoreSource: row.scoreSource || row.fuenteScore,
     iaActive: Boolean(row.aiActive ?? row.iaActiva),

@@ -22,17 +22,35 @@ function firstName(name) {
   return String(name || "").trim().split(/\s+/)[0] || "";
 }
 
+function ticketOf(patient) {
+  const name = patient.name || "";
+  const initials = String(name).trim().split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase()).join("") || "P";
+  const doc = String(patient.document || "").replace(/\s/g, "");
+  const tail = doc.length >= 3 ? doc.slice(-3) : doc;
+  return patient.ticket || (tail ? `${initials}-${tail}` : initials);
+}
+
+function clock(patient) {
+  const at = patient.arrivedAt || patient.evaluatedAt;
+  if (!at) return "";
+  return new Date(at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+}
+
 /** Mismo texto que manda el aviso automático del servidor. */
 export function noticeMessage(patient, position, now = Date.now()) {
   const name = firstName(patient.name);
+  const ticket = ticketOf(patient);
   const area = patient.destinationArea || "Urgencias";
-  const { left } = waitInfo(patient, now);
+  const { left, max } = waitInfo(patient, now);
+  const place = position ?? patient.queuePosition ?? "—";
+  const when = clock(patient);
   if (patient.present === false) {
-    return `Hola ${name}, le escribimos de Urgencias. Su turno en ${area} está por vencerse y aún no registramos su llegada. `
-      + `Por favor preséntese en los próximos ${Math.max(5, left)} minutos para conservar su prioridad.`;
+    return `Hola ${name}, su turno es ${ticket} en ${area} (puesto ${place}). Aún no registramos su llegada. `
+      + `Preséntese en los próximos ${Math.max(5, left)} minutos y mire la pantalla: cuando salga ${ticket} pase a ${area}.`;
   }
-  return `Hola ${name}, le escribimos de Urgencias. Su turno en ${area} está cerca (puesto ${position ?? "—"}). `
-    + "Por favor permanezca en la sala de espera.";
+  return `Hola ${name}, su turno es ${ticket} en ${area} (puesto ${place}, meta ${max} min${when ? `, llegó ${when}` : ""}). `
+    + `Permanezca en la sala de espera y mire la pantalla: cuando salga ${ticket} pase a ${area}.`;
 }
 
 /** Celular colombiano de 10 dígitos que empieza en 3 → se le antepone 57. */

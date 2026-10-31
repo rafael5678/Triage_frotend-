@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COMORBIDITIES } from "../ml/conditions";
 import { featureContributions, getModel, predictScore } from "../ml/model";
-import { comparePriority, createPatient } from "../models/patient";
+import { comparePriority, createPatient, isElderly, ticketCode } from "../models/patient";
 import { explainWhy } from "../models/explain";
 import {
   analyzeTriage, fetchPatients, fetchQueueHealth, fetchSymptoms, finishCare, login as loginRequest, markNotified,
@@ -316,9 +316,16 @@ export default function App() {
         iaActive: result.iaActive,
       };
       saved.explanation = explainWhy(saved);
-      setPatients((list) => [saved, ...list.filter((p) => p.id !== saved.id)].sort(comparePriority));
+      const nextList = [saved, ...patients.filter((p) => p.id !== saved.id)].sort(comparePriority);
+      setPatients(nextList);
       setForm(EMPTY_FORM);
-      flash(`${saved.name} quedó en la cola con puntaje ${saved.score}.`);
+      const ticket = saved.ticket || ticketCode(saved);
+      const place = nextList.filter((p) => p.status === "En espera").findIndex((p) => p.id === saved.id) + 1;
+      flash(`${saved.name} quedó en la cola · turno ${ticket} · puesto ${place || 1}.`);
+      if (saved.phone) {
+        const link = whatsappLink(saved, place || 1, Date.now());
+        if (link) window.open(link, "_blank", "noopener");
+      }
       setView("queue");
       setResult(null);
     } catch (error) {
@@ -520,7 +527,7 @@ export default function App() {
             <div className="hero-line">
               <div>
                 <h1>Sala de espera</h1>
-                <p>El número 1 es quien tiene el puntaje más alto ahora. No es el que llegó primero.</p>
+                <p>El 1 es el más grave. Si el nivel es el mismo, pasa quien tiene 65 años o más. El turno (JC-478) es el de la pantalla de sala.</p>
               </div>
               <button className="btn" onClick={() => setView("intake")}>Nuevo ingreso</button>
             </div>
@@ -551,8 +558,16 @@ export default function App() {
                   <li key={p.id} className={`q ${p.priority.tone} ${selected?.id === p.id ? "sel" : ""} ${waitInfo(p, now).overdue ? "overdue" : ""} ${p.present === false ? "away" : ""}`} onClick={() => setSelected(p)}>
                     <em>{String(i + 1).padStart(2, "0")}</em>
                     <div>
-                      <strong>{p.name}</strong>
-                      <small>{conditionLabel(p.conditionId)} · lleva {minutesLabel(waitInfo(p, now).waited)}</small>
+                      <strong>
+                        {p.name}
+                        {isElderly(p) && <span className="elder">65+</span>}
+                      </strong>
+                      <small>
+                        <b className="ticket">{p.ticket || ticketCode(p)}</b>
+                        {" · "}{conditionLabel(p.conditionId)}
+                        {" · llegó "}{new Date(p.arrivedAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
+                        {" · lleva "}{minutesLabel(waitInfo(p, now).waited)}
+                      </small>
                       <WaitBadges patient={p} now={now} />
                     </div>
                     <Chip priority={p.priority} />
@@ -569,7 +584,8 @@ export default function App() {
                 {selected && selectedExplain && (
                   <>
                     <Chip priority={selected.priority} />
-                    <h2>{selected.name}</h2>
+                    <p className="ticket-xl">{selected.ticket || ticketCode(selected)}</p>
+                    <h2>{selected.name}{isElderly(selected) && <span className="elder">65+</span>}</h2>
                     <p className="muted">{selectedExplain.meaning}</p>
                     <p className="scoreline">Puntaje <b>{Number(selected.score).toFixed(1)}</b> / 100</p>
                     <p className="muted">{waitSummary(selected.score, waiting).text} Porcentaje de espera: {waitSharePercent(selected.score)}% (100% = ~2 horas en un caso leve).</p>
@@ -761,6 +777,7 @@ export default function App() {
               </div>
               <div className="banner-copy">
                 <p className="severity-kicker">{result.priority.esi} · {result.priority.name}</p>
+                <p className="ticket-xl">{result.ticket || ticketCode(result)}</p>
                 <h2>{result.score.toFixed(1)} <span>/ 100</span></h2>
                 <p className="danger-lead">{result.explanation.dangerLead}</p>
                 <p>{result.explanation.meaning}</p>
@@ -842,7 +859,11 @@ export default function App() {
                 <tbody>
                   {filtered.sort(comparePriority).map((p) => (
                     <tr key={p.id}>
-                      <td><b>{p.name}</b><div className="muted">{p.age} años · {p.document}{p.phone ? ` · ${p.phone}` : ""}</div></td>
+                      <td>
+                        <b>{p.name}</b>
+                        {isElderly(p) && <span className="elder">65+</span>}
+                        <div className="muted">{p.ticket || ticketCode(p)} · {p.age} años · {p.document}{p.phone ? ` · ${p.phone}` : ""}</div>
+                      </td>
                       <td>{conditionLabel(p.conditionId)}</td>
                       <td>{Number(p.score).toFixed(1)}</td>
                       <td><Chip priority={p.priority} /></td>
@@ -927,7 +948,7 @@ export default function App() {
                 <ol className="steps">
                   <li>Se leen oxígeno, pulso, presión, temperatura, respiración, edad, motivo y enfermedades previas.</li>
                   <li>Sale un puntaje de 0 (más estable) a 100 (más grave).</li>
-                  <li>La lista se ordena del puntaje más alto al más bajo. Si empatan, gana quien llegó antes.</li>
+                  <li>La lista se ordena por gravedad (nivel de triaje y puntaje). Si el nivel es el mismo, pasa quien tiene 65 años o más. Si aún empatan, gana quien llegó antes. Un joven más grave siempre va delante de un adulto mayor más estable.</li>
                   <li>Si se vuelven a tomar los signos y empeoran, el puntaje sube y puede adelantar.</li>
                   <li>La conciencia (AVPU) suma en NEWS2. Si no responde o solo responde al dolor, sube a crítica. La glucosa por debajo de 54 o por encima de 600 también sube el piso.</li>
                   <li>Según el nivel se elige el área: reanimación, urgencias críticas, urgencias generales, consulta prioritaria o consulta externa. El dolor de pecho, el derrame, el trauma o la sepsis activan su código, y a los menores de 14 se les marca pediatría.</li>

@@ -3,7 +3,35 @@ import { CONDITIONS } from "../ml/conditions";
 import { news2Score } from "../ml/dataset";
 import { getModel, predictScore, priorityFromScore } from "../ml/model";
 
+const LEVEL_ORDER = {
+  TRIAGE_I_ROJO: 0,
+  TRIAGE_II_NARANJA: 1,
+  TRIAGE_III_AMARILLO: 2,
+  TRIAGE_IV_VERDE: 3,
+  TRIAGE_V_AZUL: 4,
+};
+
+export function ticketCode(patientOrName, document) {
+  const name = typeof patientOrName === "string" ? patientOrName : (patientOrName?.name || "");
+  const docRaw = typeof patientOrName === "string" ? document : (patientOrName?.document || "");
+  const initials = String(name || "").trim().split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase()).join("") || "P";
+  const doc = String(docRaw || "").replace(/\s/g, "");
+  const tail = doc.length >= 3 ? doc.slice(-3) : doc;
+  return tail ? `${initials}-${tail}` : initials;
+}
+
+export function isElderly(patient) {
+  return Number(patient?.age) >= 65;
+}
+
 export function comparePriority(a, b) {
+  const la = LEVEL_ORDER[a.triageLevel] ?? 9;
+  const lb = LEVEL_ORDER[b.triageLevel] ?? 9;
+  if (la !== lb) return la - lb;
+  const ea = isElderly(a) ? 1 : 0;
+  const eb = isElderly(b) ? 1 : 0;
+  if (ea !== eb) return eb - ea;
   if (b.score !== a.score) return b.score - a.score;
   return (a.arrivedAt || 0) - (b.arrivedAt || 0);
 }
