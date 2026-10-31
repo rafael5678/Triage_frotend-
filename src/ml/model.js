@@ -69,6 +69,8 @@ export function predictScore(model, row) {
   if (hr > 0 && hr < 50) p = Math.max(p, 62);
   if (sbp >= 180 || dbp >= 120) p = Math.max(p, 42);
   if (sbp >= 200) p = Math.max(p, 62);
+  if (Number.isFinite(sbp) && Number.isFinite(dbp) && sbp < dbp) p = Math.max(p, 62);
+  if (sbp > 0 && sbp < 90) p = Math.max(p, 42);
   if ((row.conditionId || row.lesionId) === "paro") p = Math.max(p, 97);
   return Math.min(100, Math.max(0, Math.round(p * 10) / 10));
 }

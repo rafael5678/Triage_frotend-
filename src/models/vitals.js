@@ -129,7 +129,7 @@ export function invertedPressure(form) {
   const down = Number(form.diastolic ?? form.pad);
   if (!Number.isFinite(up) || !Number.isFinite(down)) return "";
   if (up >= down) return "";
-  return `La presión de arriba (${up}) no puede ser menor que la de abajo (${down}). En el tensiómetro el número grande va arriba (ejemplo 120/80). Si los midió al revés, corríjalos antes de guardar.`;
+  return `La de arriba (${up}) salió menor que la de abajo (${down}). Se guarda así: el triaje lo toma como más grave, no lo rechaza.`;
 }
 
 export function crashWarning(form) {

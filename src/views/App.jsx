@@ -266,12 +266,7 @@ export default function App() {
   async function analyze(event) {
     event.preventDefault();
     if (!form.conditionId) return;
-    const swapped = invertedPressure(form);
-    if (swapped) {
-      flash(swapped);
-      return;
-    }
-    const warn = crashWarning(form);
+    const warn = [invertedPressure(form), crashWarning(form)].filter(Boolean).join(" ");
     if (warn && !window.confirm(`${warn}\n\n¿Calcular con estos números?`)) return;
     setAnalyzeBusy(true);
     const local = createPatient(toPayload(form), pack.model);
@@ -305,11 +300,6 @@ export default function App() {
 
   async function confirmEntry() {
     if (confirmBusy) return;
-    const swapped = invertedPressure(result);
-    if (swapped) {
-      setConfirmError(swapped);
-      return;
-    }
     const wa = phoneError(result.phone);
     if (String(result.phone || "").trim() && wa) {
       setConfirmError(wa);
