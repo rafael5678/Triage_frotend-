@@ -11,7 +11,7 @@ import { CARE_TARGETS, estimateWaitMinutes, waitSummary } from "../models/waitTi
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
 import { AVPU } from "../models/levels";
 import { isValidWhatsApp, minutesLabel, noticeDue, phoneError, waitInfo, whatsappLink } from "../models/notice";
-import { crashWarning, fillRestingIfEmpty, vitalHint } from "../models/vitals";
+import { crashWarning, fillRestingIfEmpty, invertedPressure, vitalHint } from "../models/vitals";
 import AdminPortal from "./AdminPortal";
 import AiIntake from "./AiIntake";
 import FieldHelp from "./FieldHelp";
@@ -266,6 +266,11 @@ export default function App() {
   async function analyze(event) {
     event.preventDefault();
     if (!form.conditionId) return;
+    const swapped = invertedPressure(form);
+    if (swapped) {
+      flash(swapped);
+      return;
+    }
     const warn = crashWarning(form);
     if (warn && !window.confirm(`${warn}\n\n¿Calcular con estos números?`)) return;
     setAnalyzeBusy(true);
@@ -300,6 +305,11 @@ export default function App() {
 
   async function confirmEntry() {
     if (confirmBusy) return;
+    const swapped = invertedPressure(result);
+    if (swapped) {
+      setConfirmError(swapped);
+      return;
+    }
     const wa = phoneError(result.phone);
     if (String(result.phone || "").trim() && wa) {
       setConfirmError(wa);

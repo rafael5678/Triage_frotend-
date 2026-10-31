@@ -124,6 +124,14 @@ export function crashSigns(form) {
   return readVitals(form).filter((row) => row.tone === "bad" && !row.estimated && row.value != null);
 }
 
+export function invertedPressure(form) {
+  const up = Number(form.systolic ?? form.pas);
+  const down = Number(form.diastolic ?? form.pad);
+  if (!Number.isFinite(up) || !Number.isFinite(down)) return "";
+  if (up >= down) return "";
+  return `La presión de arriba (${up}) no puede ser menor que la de abajo (${down}). En el tensiómetro el número grande va arriba (ejemplo 120/80). Si los midió al revés, corríjalos antes de guardar.`;
+}
+
 export function crashWarning(form) {
   const bad = crashSigns(form);
   if (!bad.length) return "";

@@ -1,5 +1,19 @@
 import { priorityFromScore } from "../ml/model";
 
+function friendlyApiError(text) {
+  const raw = String(text || "");
+  if (/systolic cannot be lower than diastolic/i.test(raw)) {
+    return "La presión de arriba no puede ser menor que la de abajo. Lo correcto es como 120/80. Si puso 84/98, esos dos números están al revés.";
+  }
+  if (/unrealistic vital signs/i.test(raw)) {
+    return "Hay un signo vital que no es realista. Revise pulso y respiración.";
+  }
+  if (/temperature is required/i.test(raw)) {
+    return "Falta la temperatura.";
+  }
+  return raw;
+}
+
 const AUTH_URL = import.meta.env.VITE_AUTH_URL || (import.meta.env.DEV ? "http://localhost:8081" : "");
 const EVAL_URL = import.meta.env.VITE_EVAL_URL || (import.meta.env.DEV ? "http://localhost:8082" : "");
 const QUEUE_URL = import.meta.env.VITE_QUEUE_URL || (import.meta.env.DEV ? "http://localhost:8083" : "");
@@ -21,7 +35,7 @@ async function request(base, path, options = {}, timeoutMs = 60000) {
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
       const fields = err.fields ? Object.entries(err.fields).map(([k, v]) => `${k}: ${v}`).join("; ") : "";
-      throw new Error(err.error || err.message || err.detail || fields || `Error ${res.status}`);
+      throw new Error(friendlyApiError(err.error || err.message || err.detail || fields || `Error ${res.status}`));
     }
     if (res.status === 204) return null;
     const text = await res.text();
