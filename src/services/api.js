@@ -298,7 +298,7 @@ export async function fetchStats() {
 }
 
 export async function fetchBoard() {
-  return request(QUEUE_URL, "/api/v1/triage/board");
+  return request(QUEUE_URL, "/api/v1/triage/board", {}, 90000);
 }
 
 export async function fetchSymptoms() {

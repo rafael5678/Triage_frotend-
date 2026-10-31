@@ -109,8 +109,8 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
   return (
     <div className="ai-intake">
       <div className="ai-intake-head">
-        <h3>Contar lo que pasa (la IA llena el formulario)</h3>
-        <p className="sub">Escriba o dicte lo que dice el paciente o el acompañante. Si hay una herida, quemadura o algo visible, tómele una foto.</p>
+        <h3>Qué está pasando</h3>
+        <p className="sub">Díctelo o escríbalo. Gemini completa edad, motivo y signos. Si hay herida, agregue foto.</p>
       </div>
       <textarea
         rows="3"

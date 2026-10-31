@@ -23,7 +23,7 @@ const SESSION_KEY = "triage.session";
 
 const NAV = [
   ["queue", "Sala de espera"],
-  ["intake", "Nuevo ingreso"],
+  ["intake", "Ingreso"],
   ["patients", "Pacientes"],
   ["stats", "Estadísticas"],
   ["report", "Reporte del turno"],
@@ -101,7 +101,6 @@ function Field({ label, help, children, className, ask, value, context, estimate
         {estimated && <span className="est-badge">Estimado por IA · medir</span>}
       </span>
       {children}
-      {help && <small className="field-help">{help}</small>}
     </div>
   );
 }
@@ -599,18 +598,19 @@ export default function App() {
         {view === "intake" && (
           <section className="page">
             <h1>Nuevo ingreso</h1>
-            <p className="sub">Escribe lo que ves o te dicen. No hace falta saber medicina: cada casilla explica qué pedir.</p>
-            <form className="sheet" onSubmit={analyze}>
+            <p className="sub">1. Cuente qué pasa. 2. Pulse Llenar con IA. 3. Revise los números y calcule. El ? explica cualquier casilla.</p>
+            <form className="sheet intake-sheet" onSubmit={analyze}>
               <AiIntake form={form} onApply={applyForm} comorbidities={COMORBIDITIES} flash={flash} />
-              <h3>Quién es</h3>
+
+              <h3>Paciente</h3>
               <div className="g2">
-                <Field label="Nombre y apellido" help="Como aparece en la cédula o como se presenta.">
-                  <input required value={form.name} onChange={(e) => setField("name", e.target.value)} />
+                <Field label="Nombre">
+                  <input required placeholder="Nombre y apellido" value={form.name} onChange={(e) => setField("name", e.target.value)} />
                 </Field>
-                <Field label="Documento" help="Cédula, tarjeta de identidad o pasaporte.">
-                  <input required value={form.document} onChange={(e) => setField("document", e.target.value)} />
+                <Field label="Documento">
+                  <input required placeholder="Cédula o TI" value={form.document} onChange={(e) => setField("document", e.target.value)} />
                 </Field>
-                <Field label="Edad (años)" help="Si no la sabe, pregunte cuántos años tiene.">
+                <Field label="Edad">
                   <input required type="number" min="0" max="120" value={form.age} onChange={(e) => setField("age", e.target.value)} />
                 </Field>
                 <Field label="Sexo">
@@ -620,109 +620,99 @@ export default function App() {
                     <option value="O">Otro / no dice</option>
                   </select>
                 </Field>
-                <Field label="Celular (WhatsApp)" help="Para avisarle cuando se acerque su turno si sale de la sala. Ej.: 300 123 4567.">
-                  <input type="tel" inputMode="tel" maxLength={20} value={form.phone} onChange={(e) => setField("phone", e.target.value)} />
-                </Field>
-                <Field label="¿Ya está en la sala?" help="Si se registró por teléfono o desde la entrada y todavía no llega, marque que no.">
-                  <select value={form.present ? "si" : "no"} onChange={(e) => setField("present", e.target.value === "si")}>
-                    <option value="si">Sí, está aquí</option>
-                    <option value="no">Todavía no ha llegado</option>
-                  </select>
-                </Field>
                 {form.sex === "F" && Number(form.age) >= 10 && Number(form.age) <= 55 && (
                   <>
-                    <Field label="¿Está embarazada?" help="El embarazo cambia qué presión es peligrosa y activa la valoración obstétrica.">
+                    <Field label="¿Embarazo?">
                       <select value={form.pregnant ? "si" : "no"} onChange={(e) => setField("pregnant", e.target.value === "si")}>
                         <option value="no">No / no sabe</option>
                         <option value="si">Sí</option>
                       </select>
                     </Field>
                     {form.pregnant && (
-                      <Field label="Semanas de embarazo" help="Si no sabe, déjelo vacío. Desde la semana 20 se vigila la preeclampsia.">
+                      <Field label="Semanas">
                         <input type="number" min="1" max="45" value={form.gestationWeeks} onChange={(e) => setField("gestationWeeks", e.target.value)} />
                       </Field>
                     )}
                   </>
                 )}
-                <Field className="full" label="¿Qué le pasa? (lo más grave)" help="Elija la opción que más se parezca. Eso cambia el orden de la cola.">
+                <Field className="full" label="Qué le pasa">
                   <select required value={form.conditionId} onChange={(e) => setField("conditionId", e.target.value)}>
-                    <option value="">Seleccione una opción…</option>
+                    <option value="">La IA lo sugiere, o elija aquí…</option>
                     {conditions.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                   </select>
                 </Field>
-                {form.conditionId && <p className="field-help full-note">{conditions.find((c) => c.id === form.conditionId)?.hint}</p>}
-                <Field className="full" label="Cuéntenos un poco más (opcional)" help="Con palabras simples: desde cuándo, si empeoró, si se golpeó.">
-                  <textarea rows="2" value={form.reason} onChange={(e) => setField("reason", e.target.value)} />
+              </div>
+
+              <h3>Signos (oxímetro, tensiómetro, termómetro)</h3>
+              <div className="g3 vitals-grid">
+                <Field label="Oxígeno %" ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
+                  <input required type="number" min="50" max="100" placeholder="95–100" value={form.spo2} onChange={(e) => setField("spo2", e.target.value)} />
+                </Field>
+                <Field label="Pulso" ask="Frecuencia cardiaca (latidos por minuto)" value={form.heartRate} context={caseContext} estimated={form.estimatedFields.includes("heartRate")}>
+                  <input required type="number" min="20" max="220" placeholder="60–100" value={form.heartRate} onChange={(e) => setField("heartRate", e.target.value)} />
+                </Field>
+                <Field label="PA arriba" ask="Presión arterial sistólica (mmHg)" value={form.systolic} context={caseContext} estimated={form.estimatedFields.includes("systolic")}>
+                  <input required type="number" min="50" max="250" placeholder="120" value={form.systolic} onChange={(e) => setField("systolic", e.target.value)} />
+                </Field>
+                <Field label="PA abajo" ask="Presión arterial diastólica (mmHg)" value={form.diastolic} context={caseContext} estimated={form.estimatedFields.includes("diastolic")}>
+                  <input required type="number" min="20" max="160" placeholder="80" value={form.diastolic} onChange={(e) => setField("diastolic", e.target.value)} />
+                </Field>
+                <Field label="Temp. °C" ask="Temperatura corporal (°C)" value={form.temperature} context={caseContext} estimated={form.estimatedFields.includes("temperature")}>
+                  <input required type="number" step="0.1" min="32" max="43" placeholder="36.5" value={form.temperature} onChange={(e) => setField("temperature", e.target.value)} />
+                </Field>
+                <Field label="Respiración" ask="Frecuencia respiratoria (respiraciones por minuto)" value={form.respiratoryRate} context={caseContext} estimated={form.estimatedFields.includes("respiratoryRate")}>
+                  <input required type="number" min="4" max="50" placeholder="12–20" value={form.respiratoryRate} onChange={(e) => setField("respiratoryRate", e.target.value)} />
                 </Field>
               </div>
-              <h3>Números del cuerpo (signos vitales)</h3>
-              <p className="sub">Los toma el tensiómetro, el termómetro y el clip del dedo (oxímetro). Si aún no los tienen, pídalos al que toma los signos.</p>
-              <div className="g3">
-                <Field label="Oxígeno en sangre (%)" help="Clip en el dedo. Normal: 95 a 100. Si está bajo 94, avise."
-                  ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
-                  <input required type="number" min="50" max="100" value={form.spo2} onChange={(e) => setField("spo2", e.target.value)} />
-                </Field>
-                <Field label="Latidos por minuto" help="Pulso. En un adulto tranquilo suele ser 60 a 100."
-                  ask="Frecuencia cardiaca (latidos por minuto)" value={form.heartRate} context={caseContext} estimated={form.estimatedFields.includes("heartRate")}>
-                  <input required type="number" min="20" max="220" value={form.heartRate} onChange={(e) => setField("heartRate", e.target.value)} />
-                </Field>
-                <Field label="Presión: número de arriba" help="El mayor del tensiómetro (sistólica). Ejemplo: en 120/80, este es 120."
-                  ask="Presión arterial sistólica (mmHg)" value={form.systolic} context={caseContext} estimated={form.estimatedFields.includes("systolic")}>
-                  <input required type="number" min="50" max="250" value={form.systolic} onChange={(e) => setField("systolic", e.target.value)} />
-                </Field>
-                <Field label="Presión: número de abajo" help="El menor (diastólica). En 120/80, este es 80."
-                  ask="Presión arterial diastólica (mmHg)" value={form.diastolic} context={caseContext} estimated={form.estimatedFields.includes("diastolic")}>
-                  <input required type="number" min="20" max="160" value={form.diastolic} onChange={(e) => setField("diastolic", e.target.value)} />
-                </Field>
-                <Field label="Temperatura (°C)" help="En la frente o axila. Un adulto suele estar cerca de 36.5 a 37.2."
-                  ask="Temperatura corporal (°C)" value={form.temperature} context={caseContext} estimated={form.estimatedFields.includes("temperature")}>
-                  <input required type="number" step="0.1" min="32" max="43" value={form.temperature} onChange={(e) => setField("temperature", e.target.value)} />
-                </Field>
-                <Field label="Respiraciones en un minuto" help="Cuente pechos que suben en 60 segundos. En reposo: más o menos 12 a 20."
-                  ask="Frecuencia respiratoria (respiraciones por minuto)" value={form.respiratoryRate} context={caseContext} estimated={form.estimatedFields.includes("respiratoryRate")}>
-                  <input required type="number" min="4" max="50" value={form.respiratoryRate} onChange={(e) => setField("respiratoryRate", e.target.value)} />
-                </Field>
-              </div>
-              <h3>Otros datos (si los tiene)</h3>
-              <p className="sub">No son obligatorios. Si no sabe qué son, toque el signo de pregunta y la IA se lo explica.</p>
-              <div className="g3">
-                <Field label="Glucosa / azúcar (mg/dL)" help="Glucómetro de dedo. Útil en diabéticos, desmayos o confusión."
-                  ask="Glucosa en sangre (glucometría, mg/dL)" value={form.glucose} context={caseContext}>
-                  <input type="number" min="10" max="1500" value={form.glucose} onChange={(e) => setField("glucose", e.target.value)} />
-                </Field>
-                <Field label="Dolor de 0 a 10" help="Pregunte: de 0 (nada) a 10 (el peor dolor de su vida)."
-                  ask="Escala de dolor de 0 a 10" value={form.painScale} context={caseContext}>
-                  <input type="number" min="0" max="10" value={form.painScale} onChange={(e) => setField("painScale", e.target.value)} />
-                </Field>
-                <Field label="Cómo está de conciencia" help="Escala AVPU: si no está alerta, el riesgo sube mucho."
-                  ask="Estado de conciencia (escala AVPU)" value={form.consciousness} context={caseContext}>
-                  <select value={form.consciousness} onChange={(e) => setField("consciousness", e.target.value)}>
-                    {AVPU.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                  </select>
-                </Field>
-              </div>
-              <h3>¿Ya tenía alguna de estas enfermedades?</h3>
-              <p className="sub">Marque solo si la persona lo dice o está en un papel. Si no sabe, déjelo vacío.</p>
-              <div className="checks">
-                {COMORBIDITIES.map((c) => (
-                  <label key={c.id} className="chk">
-                    <input
-                      type="checkbox"
-                      checked={form.comorbidityIds.includes(c.id)}
-                      onChange={() =>
-                        setField(
-                          "comorbidityIds",
-                          form.comorbidityIds.includes(c.id)
-                            ? form.comorbidityIds.filter((x) => x !== c.id)
-                            : [...form.comorbidityIds, c.id]
-                        )
-                      }
-                    />
-                    {c.label}
-                  </label>
-                ))}
-              </div>
-              <button className="btn wide" type="submit" disabled={analyzeBusy}>{analyzeBusy ? "Analizando con el protocolo y la IA…" : "Calcular puntaje y explicar"}</button>
+
+              <details className="more-box">
+                <summary>Más datos opcionales (celular, glucosa, dolor, enfermedades)</summary>
+                <div className="g3" style={{ marginTop: 12 }}>
+                  <Field label="Celular">
+                    <input type="tel" inputMode="tel" maxLength={20} placeholder="300 123 4567" value={form.phone} onChange={(e) => setField("phone", e.target.value)} />
+                  </Field>
+                  <Field label="¿Ya está en sala?">
+                    <select value={form.present ? "si" : "no"} onChange={(e) => setField("present", e.target.value === "si")}>
+                      <option value="si">Sí</option>
+                      <option value="no">Aún no llega</option>
+                    </select>
+                  </Field>
+                  <Field label="Glucosa" ask="Glucosa en sangre (glucometría, mg/dL)" value={form.glucose} context={caseContext}>
+                    <input type="number" min="10" max="1500" value={form.glucose} onChange={(e) => setField("glucose", e.target.value)} />
+                  </Field>
+                  <Field label="Dolor 0–10" ask="Escala de dolor de 0 a 10" value={form.painScale} context={caseContext}>
+                    <input type="number" min="0" max="10" value={form.painScale} onChange={(e) => setField("painScale", e.target.value)} />
+                  </Field>
+                  <Field label="Conciencia" ask="Estado de conciencia (escala AVPU)" value={form.consciousness} context={caseContext}>
+                    <select value={form.consciousness} onChange={(e) => setField("consciousness", e.target.value)}>
+                      {AVPU.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field className="full" label="Detalle (opcional)">
+                    <textarea rows="2" placeholder="Desde cuándo, si empeoró…" value={form.reason} onChange={(e) => setField("reason", e.target.value)} />
+                  </Field>
+                </div>
+                <div className="checks">
+                  {COMORBIDITIES.map((c) => (
+                    <label key={c.id} className="chk">
+                      <input
+                        type="checkbox"
+                        checked={form.comorbidityIds.includes(c.id)}
+                        onChange={() =>
+                          setField(
+                            "comorbidityIds",
+                            form.comorbidityIds.includes(c.id)
+                              ? form.comorbidityIds.filter((x) => x !== c.id)
+                              : [...form.comorbidityIds, c.id]
+                          )
+                        }
+                      />
+                      {c.label}
+                    </label>
+                  ))}
+                </div>
+              </details>
+              <button className="btn wide" type="submit" disabled={analyzeBusy}>{analyzeBusy ? "Calculando con el protocolo y Gemini…" : "Calcular puntaje"}</button>
             </form>
           </section>
         )}
