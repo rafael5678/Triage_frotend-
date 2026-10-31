@@ -11,10 +11,11 @@ import { CARE_TARGETS, estimateWaitMinutes, waitSharePercent, waitSummary } from
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
 import { AVPU } from "../models/levels";
 import { minutesLabel, noticeDue, waitInfo, whatsappLink } from "../models/notice";
+import { crashWarning, fillRestingIfEmpty, vitalHint } from "../models/vitals";
 import AdminPortal from "./AdminPortal";
 import AiIntake from "./AiIntake";
 import FieldHelp from "./FieldHelp";
-import Recommendations, { DestinationCard, EstimatedWarning } from "./Recommendations";
+import Recommendations, { DestinationCard, EstimatedWarning, VitalGuide } from "./Recommendations";
 import ShiftReport from "./ShiftReport";
 import StatsView from "./StatsView";
 import Timeline from "./Timeline";
@@ -92,7 +93,8 @@ function Chip({ priority }) {
 }
 
 /** ask: nombre del dato para que la IA lo explique; estimated: el valor lo puso la IA y falta medirlo. */
-function Field({ label, help, children, className, ask, value, context, estimated }) {
+function Field({ label, help, children, className, ask, value, context, estimated, rangeKey }) {
+  const hint = rangeKey ? vitalHint(rangeKey, value) : null;
   return (
     <div className={`field ${className || ""} ${estimated ? "is-estimated" : ""}`.trim()}>
       <span className="label-row">
@@ -101,6 +103,7 @@ function Field({ label, help, children, className, ask, value, context, estimate
         {estimated && <span className="est-badge">Estimado por IA · medir</span>}
       </span>
       {children}
+      {hint && <small className={`vital-live ${hint.ok ? "ok" : "bad"}`}>{hint.text}</small>}
     </div>
   );
 }
@@ -261,6 +264,8 @@ export default function App() {
   async function analyze(event) {
     event.preventDefault();
     if (!form.conditionId) return;
+    const warn = crashWarning(form);
+    if (warn && !window.confirm(`${warn}\n\n¿Calcular con estos números?`)) return;
     setAnalyzeBusy(true);
     const local = createPatient(toPayload(form), pack.model);
     local.contributions = featureContributions(pack.model, local);
@@ -643,24 +648,32 @@ export default function App() {
                 </Field>
               </div>
 
-              <h3>Signos (oxímetro, tensiómetro, termómetro)</h3>
+              <h3>Signos (se miden, no se adivinan)</h3>
+              <p className="sub">
+                Oxígeno: clip en el dedo. Pulso: el mismo clip o la muñeca. Presión: tensiómetro (el de arriba / el de abajo).
+                Temperatura: frente o axila. Respiración: cuente el pecho 1 minuto.
+                Si está ensayando y no tiene aparatos, use reposo de adulto.
+              </p>
+              <button type="button" className="ghost" onClick={() => applyForm(fillRestingIfEmpty(form))}>
+                Usar signos de un adulto en reposo (ensayo)
+              </button>
               <div className="g3 vitals-grid">
-                <Field label="Oxígeno %" ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
+                <Field label="Oxígeno %" rangeKey="spo2" ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
                   <input required type="number" min="50" max="100" placeholder="95–100" value={form.spo2} onChange={(e) => setField("spo2", e.target.value)} />
                 </Field>
-                <Field label="Pulso" ask="Frecuencia cardiaca (latidos por minuto)" value={form.heartRate} context={caseContext} estimated={form.estimatedFields.includes("heartRate")}>
+                <Field label="Pulso" rangeKey="heartRate" ask="Frecuencia cardiaca (latidos por minuto)" value={form.heartRate} context={caseContext} estimated={form.estimatedFields.includes("heartRate")}>
                   <input required type="number" min="20" max="220" placeholder="60–100" value={form.heartRate} onChange={(e) => setField("heartRate", e.target.value)} />
                 </Field>
-                <Field label="PA arriba" ask="Presión arterial sistólica (mmHg)" value={form.systolic} context={caseContext} estimated={form.estimatedFields.includes("systolic")}>
+                <Field label="PA arriba" rangeKey="systolic" ask="Presión arterial sistólica (mmHg)" value={form.systolic} context={caseContext} estimated={form.estimatedFields.includes("systolic")}>
                   <input required type="number" min="50" max="250" placeholder="120" value={form.systolic} onChange={(e) => setField("systolic", e.target.value)} />
                 </Field>
-                <Field label="PA abajo" ask="Presión arterial diastólica (mmHg)" value={form.diastolic} context={caseContext} estimated={form.estimatedFields.includes("diastolic")}>
+                <Field label="PA abajo" rangeKey="diastolic" ask="Presión arterial diastólica (mmHg)" value={form.diastolic} context={caseContext} estimated={form.estimatedFields.includes("diastolic")}>
                   <input required type="number" min="20" max="160" placeholder="80" value={form.diastolic} onChange={(e) => setField("diastolic", e.target.value)} />
                 </Field>
-                <Field label="Temp. °C" ask="Temperatura corporal (°C)" value={form.temperature} context={caseContext} estimated={form.estimatedFields.includes("temperature")}>
+                <Field label="Temp. °C" rangeKey="temperature" ask="Temperatura corporal (°C)" value={form.temperature} context={caseContext} estimated={form.estimatedFields.includes("temperature")}>
                   <input required type="number" step="0.1" min="32" max="43" placeholder="36.5" value={form.temperature} onChange={(e) => setField("temperature", e.target.value)} />
                 </Field>
-                <Field label="Respiración" ask="Frecuencia respiratoria (respiraciones por minuto)" value={form.respiratoryRate} context={caseContext} estimated={form.estimatedFields.includes("respiratoryRate")}>
+                <Field label="Respiración" rangeKey="respiratoryRate" ask="Frecuencia respiratoria (respiraciones por minuto)" value={form.respiratoryRate} context={caseContext} estimated={form.estimatedFields.includes("respiratoryRate")}>
                   <input required type="number" min="4" max="50" placeholder="12–20" value={form.respiratoryRate} onChange={(e) => setField("respiratoryRate", e.target.value)} />
                 </Field>
               </div>
@@ -720,7 +733,11 @@ export default function App() {
         {view === "result" && result && (
           <section className="page">
             <h1>Por qué salió este puntaje</h1>
-            <p className="sub">Es una guía. Quien atiende confirma si está de acuerdo. El puntaje mezcla el dataset del hospital con el criterio clínico de Gemini.</p>
+            <p className="sub">
+              El número sale sobre todo de los signos que usted escribió, no del texto “dolor de cabeza”.
+              Gemini solo puede subir un poco el riesgo; nunca baja un caso que ya está grave por oxígeno, pulso o presión.
+            </p>
+            {crashWarning(result) && <p className="warn-line">{crashWarning(result)}</p>}
             <div className={`banner ${result.priority.tone}`}>
               <div className={`severity-stamp ${result.priority.tone}`}>
                 {result.priority.chip}
@@ -736,6 +753,7 @@ export default function App() {
               <DestinationCard patient={result} />
             </div>
             <EstimatedWarning fields={result.estimatedFields} />
+            <VitalGuide patient={result} />
             <Recommendations patient={result} />
             <div className="split">
               <div className="sheet">

@@ -384,6 +384,18 @@ td { padding: 12px 8px; border-bottom: 1px solid #efe8dc; vertical-align: top; }
 }
 .more-box summary { cursor: pointer; font-weight: 700; color: var(--teal); }
 .intake-sheet .sub { margin-top: 0; }
+.vital-read { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.vital-read li { background: var(--sand); border-radius: 14px; padding: 12px 14px; }
+.vital-read li.bad { background: #fff1f2; }
+.vital-read li.ok { background: #ecfdf5; }
+.vital-read li.est { background: #fffbeb; }
+.vital-read li > div { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.vital-read strong { font-family: Fraunces, serif; font-size: 22px; }
+.vital-read small, .vital-read p { display: block; color: var(--muted); margin: 4px 0 0; font-size: 13px; }
+.vital-live { display: block; margin-top: 4px; font-size: 12px; font-weight: 700; }
+.vital-live.ok { color: #15803d; }
+.vital-live.bad { color: var(--i); }
+.warn-line { background: #fff1f2; color: #9f1239; border-radius: 12px; padding: 10px 14px; font-size: 14px; }
 .board-row.away { opacity: .7; border-style: dashed; }
 .board-row strong { display: grid; }
 .board-note { font-size: 13px; letter-spacing: 0; font-weight: 600; color: #fcd34d; }
