@@ -10,7 +10,7 @@ import {
 import { CARE_TARGETS, estimateWaitMinutes, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
 import { AVPU } from "../models/levels";
-import { minutesLabel, noticeDue, waitInfo, whatsappLink } from "../models/notice";
+import { isValidWhatsApp, minutesLabel, noticeDue, phoneError, waitInfo, whatsappLink } from "../models/notice";
 import { crashWarning, fillRestingIfEmpty, vitalHint } from "../models/vitals";
 import AdminPortal from "./AdminPortal";
 import AiIntake from "./AiIntake";
@@ -93,8 +93,8 @@ function Chip({ priority }) {
 }
 
 /** ask: nombre del dato para que la IA lo explique; estimated: el valor lo puso la IA y falta medirlo. */
-function Field({ label, help, children, className, ask, value, context, estimated, rangeKey }) {
-  const hint = rangeKey ? vitalHint(rangeKey, value) : null;
+function Field({ label, help, children, className, ask, value, context, estimated, rangeKey, age }) {
+  const hint = rangeKey ? vitalHint(rangeKey, value, age) : null;
   return (
     <div className={`field ${className || ""} ${estimated ? "is-estimated" : ""}`.trim()}>
       <span className="label-row">
@@ -300,6 +300,11 @@ export default function App() {
 
   async function confirmEntry() {
     if (confirmBusy) return;
+    const wa = phoneError(result.phone);
+    if (String(result.phone || "").trim() && wa) {
+      setConfirmError(wa);
+      return;
+    }
     setConfirmBusy(true);
     setConfirmError("");
     try {
@@ -322,7 +327,7 @@ export default function App() {
       const ticket = saved.ticket || ticketCode(saved);
       const place = nextList.filter((p) => p.status === "En espera").findIndex((p) => p.id === saved.id) + 1;
       flash(`${saved.name} quedó en la cola · turno ${ticket} · puesto ${place || 1}.`);
-      if (saved.phone) {
+      if (isValidWhatsApp(saved.phone)) {
         const link = whatsappLink(saved, place || 1, Date.now());
         if (link) window.open(link, "_blank", "noopener");
       }
@@ -647,9 +652,11 @@ export default function App() {
                 <Field label="Documento">
                   <input required placeholder="Cédula o TI" value={form.document} onChange={(e) => setField("document", e.target.value)} />
                 </Field>
-                <Field className="full" label="WhatsApp (celular)">
+                <Field className="full" label="WhatsApp (celular colombiano)">
                   <input type="tel" inputMode="tel" maxLength={20} placeholder="300 123 4567" value={form.phone} onChange={(e) => setField("phone", e.target.value)} />
-                  <small className="hint">Si lo escribe, al confirmar se le manda el turno (ejemplo CM-627) por WhatsApp.</small>
+                  <small className={phoneError(form.phone) ? "vital-live bad" : "hint"}>
+                    {phoneError(form.phone) || "Solo un celular real de Colombia (10 dígitos, empieza en 3). Al confirmar se manda el turno por WhatsApp."}
+                  </small>
                 </Field>
                 <Field label="Edad">
                   <input required type="number" min="0" max="120" value={form.age} onChange={(e) => setField("age", e.target.value)} />
@@ -688,28 +695,28 @@ export default function App() {
               <p className="sub">
                 Oxígeno: clip en el dedo. Pulso: el mismo clip o la muñeca. Presión: tensiómetro (el de arriba / el de abajo).
                 Temperatura: frente o axila. Respiración: cuente el pecho 1 minuto.
-                Si está ensayando y no tiene aparatos, use reposo de adulto.
+                Si está ensayando y no tiene aparatos, use reposo para la edad que escribió.
               </p>
               <button type="button" className="ghost" onClick={() => applyForm(fillRestingIfEmpty(form))}>
-                Usar signos de un adulto en reposo (ensayo)
+                Usar signos de reposo para esta edad (ensayo)
               </button>
               <div className="g3 vitals-grid">
-                <Field label="Oxígeno %" rangeKey="spo2" ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
+                <Field label="Oxígeno %" rangeKey="spo2" age={form.age} ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
                   <input required type="number" min="50" max="100" placeholder="95–100" value={form.spo2} onChange={(e) => setField("spo2", e.target.value)} />
                 </Field>
-                <Field label="Pulso" rangeKey="heartRate" ask="Frecuencia cardiaca (latidos por minuto)" value={form.heartRate} context={caseContext} estimated={form.estimatedFields.includes("heartRate")}>
+                <Field label="Pulso" rangeKey="heartRate" age={form.age} ask="Frecuencia cardiaca (latidos por minuto)" value={form.heartRate} context={caseContext} estimated={form.estimatedFields.includes("heartRate")}>
                   <input required type="number" min="20" max="220" placeholder="60–100" value={form.heartRate} onChange={(e) => setField("heartRate", e.target.value)} />
                 </Field>
-                <Field label="PA arriba" rangeKey="systolic" ask="Presión arterial sistólica (mmHg)" value={form.systolic} context={caseContext} estimated={form.estimatedFields.includes("systolic")}>
+                <Field label="PA arriba" rangeKey="systolic" age={form.age} ask="Presión arterial sistólica (mmHg)" value={form.systolic} context={caseContext} estimated={form.estimatedFields.includes("systolic")}>
                   <input required type="number" min="50" max="250" placeholder="120" value={form.systolic} onChange={(e) => setField("systolic", e.target.value)} />
                 </Field>
-                <Field label="PA abajo" rangeKey="diastolic" ask="Presión arterial diastólica (mmHg)" value={form.diastolic} context={caseContext} estimated={form.estimatedFields.includes("diastolic")}>
+                <Field label="PA abajo" rangeKey="diastolic" age={form.age} ask="Presión arterial diastólica (mmHg)" value={form.diastolic} context={caseContext} estimated={form.estimatedFields.includes("diastolic")}>
                   <input required type="number" min="20" max="160" placeholder="80" value={form.diastolic} onChange={(e) => setField("diastolic", e.target.value)} />
                 </Field>
-                <Field label="Temp. °C" rangeKey="temperature" ask="Temperatura corporal (°C)" value={form.temperature} context={caseContext} estimated={form.estimatedFields.includes("temperature")}>
+                <Field label="Temp. °C" rangeKey="temperature" age={form.age} ask="Temperatura corporal (°C)" value={form.temperature} context={caseContext} estimated={form.estimatedFields.includes("temperature")}>
                   <input required type="number" step="0.1" min="32" max="43" placeholder="36.5" value={form.temperature} onChange={(e) => setField("temperature", e.target.value)} />
                 </Field>
-                <Field label="Respiración" rangeKey="respiratoryRate" ask="Frecuencia respiratoria (respiraciones por minuto)" value={form.respiratoryRate} context={caseContext} estimated={form.estimatedFields.includes("respiratoryRate")}>
+                <Field label="Respiración" rangeKey="respiratoryRate" age={form.age} ask="Frecuencia respiratoria (respiraciones por minuto)" value={form.respiratoryRate} context={caseContext} estimated={form.estimatedFields.includes("respiratoryRate")}>
                   <input required type="number" min="4" max="50" placeholder="12–20" value={form.respiratoryRate} onChange={(e) => setField("respiratoryRate", e.target.value)} />
                 </Field>
               </div>
@@ -815,11 +822,12 @@ export default function App() {
             </div>
             <div className="sheet wa-box">
               <h3>Avisar el turno por WhatsApp</h3>
-              <p className="muted">Ponga el celular del paciente. Al confirmar se abre WhatsApp con el turno {result.ticket || ticketCode(result)}, el puesto y el área.</p>
+              <p className="muted">Celular colombiano real. Al confirmar se abre WhatsApp con el turno {result.ticket || ticketCode(result)}, el puesto y el área.</p>
               <Field label="Celular">
                 <input type="tel" inputMode="tel" maxLength={20} placeholder="300 123 4567" value={result.phone || ""} onChange={(e) => setResult({ ...result, phone: e.target.value })} />
               </Field>
-              {!String(result.phone || "").trim() && <p className="warn-line">Sin celular no le llega el mensaje. Puede confirmar igual y avisar después.</p>}
+              {phoneError(result.phone) && <p className="form-err">{phoneError(result.phone)}</p>}
+              {!String(result.phone || "").trim() && <p className="warn-line">Sin un celular válido no le llega el mensaje. Puede confirmar igual y avisar después.</p>}
             </div>
             {confirmError && <p className="form-err">{confirmError}</p>}
             <div className="row-btns" style={{ marginTop: 16 }}>

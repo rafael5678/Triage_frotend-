@@ -53,11 +53,41 @@ export function noticeMessage(patient, position, now = Date.now()) {
     + `Permanezca en la sala de espera y mire la pantalla: cuando salga ${ticket} pase a ${area}.`;
 }
 
-/** Celular colombiano de 10 dígitos que empieza en 3 → se le antepone 57. */
-export function normalizePhone(raw) {
-  const digits = String(raw || "").replace(/\D/g, "");
-  if (digits.length === 10 && digits.startsWith("3")) return `57${digits}`;
+const MOBILE_PREFIX = new Set([
+  "300", "301", "302", "303", "304", "305",
+  "310", "311", "312", "313", "314", "315", "316", "317", "318", "319",
+  "320", "321", "322", "323", "324", "333",
+  "350", "351", "352", "353",
+]);
+
+export const WHATSAPP_HINT = "Use un celular colombiano de 10 dígitos que empiece por 3 (ejemplo 300 123 4567). No se aceptan números inventados.";
+
+function localTen(raw) {
+  let digits = String(raw || "").replace(/\D/g, "");
+  if (digits.startsWith("57") && digits.length === 12) digits = digits.slice(2);
   return digits;
+}
+
+export function isValidWhatsApp(raw) {
+  if (!String(raw || "").trim()) return false;
+  const ten = localTen(raw);
+  if (ten.length !== 10 || !ten.startsWith("3")) return false;
+  if (!MOBILE_PREFIX.has(ten.slice(0, 3))) return false;
+  if (new Set(ten).size <= 2) return false;
+  if (/^3\d0{8}$/.test(ten)) return false;
+  if (new Set(ten.slice(3)).size <= 1) return false;
+  return true;
+}
+
+export function phoneError(raw) {
+  if (!String(raw || "").trim()) return "";
+  return isValidWhatsApp(raw) ? "" : WHATSAPP_HINT;
+}
+
+/** Celular colombiano válido → 57 + 10 dígitos. */
+export function normalizePhone(raw) {
+  if (!isValidWhatsApp(raw)) return "";
+  return `57${localTen(raw)}`;
 }
 
 export function whatsappLink(patient, position, now = Date.now()) {

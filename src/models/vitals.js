@@ -1,90 +1,105 @@
-/** Valores de reposo si nadie midió. No son un diagnóstico: evitan que la IA invente un shock. */
-export const RESTING_VITALS = {
-  spo2: 97,
-  heartRate: 78,
-  systolic: 118,
-  diastolic: 76,
-  temperature: 36.6,
-  respiratoryRate: 16,
-};
+import { ageNorms, rangeText } from "./ageNorms";
 
-const ITEMS = [
-  {
-    key: "spo2",
-    label: "Oxígeno en sangre",
-    unit: "%",
-    how: "Clip del dedo (oxímetro).",
-    normal: "95 a 100",
-    bad: (n) => (n < 90 ? "muy bajo" : n < 94 ? "un poco bajo" : "bien"),
-    why: (n) => n < 94
-      ? `Salió ${n}%. Por debajo de 94 el cuerpo está recibiendo poco aire; por eso el puntaje sube.`
-      : `Salió ${n}%. Está en el rango habitual.`,
-  },
-  {
-    key: "heartRate",
-    label: "Pulso (latidos por minuto)",
-    unit: "",
-    how: "En la muñeca o en el oxímetro.",
-    normal: "60 a 100 en un adulto quieto",
-    bad: (n) => (n < 40 || n > 130 ? "muy alterado" : n < 50 || n > 110 ? "fuera de lo habitual" : "bien"),
-    why: (n) => (n < 50 || n > 110)
-      ? `Salió ${n}. Un adulto en reposo suele estar entre 60 y 100. Muy lento o muy rápido sube el riesgo.`
-      : `Salió ${n}. Está cerca del reposo.`,
-  },
-  {
-    key: "systolic",
-    label: "Presión de arriba",
-    unit: "",
-    how: "El número mayor del tensiómetro (ejemplo: en 120/80, este es 120).",
-    normal: "90 a 140",
-    bad: (n) => (n < 90 ? "baja" : n > 180 ? "muy alta" : "aceptable"),
-    why: (n) => n < 90
-      ? `Salió ${n}. Baja de 90 puede significar que no llega bien la sangre a los órganos.`
-      : n > 180
-        ? `Salió ${n}. Está muy alta.`
-        : `Salió ${n}. No es un valor de emergencia por sí solo.`,
-  },
-  {
-    key: "diastolic",
-    label: "Presión de abajo",
-    unit: "",
-    how: "El número menor del tensiómetro (en 120/80, este es 80).",
-    normal: "60 a 90",
-    bad: (n) => (n < 50 ? "baja" : n > 110 ? "alta" : "aceptable"),
-    why: (n) => `Salió ${n}. Se lee junto con la de arriba.`,
-  },
-  {
-    key: "temperature",
-    label: "Temperatura",
-    unit: "°C",
-    how: "Termómetro en frente o axila.",
-    normal: "36.1 a 37.2",
-    bad: (n) => (n >= 39 ? "fiebre alta" : n <= 35.5 ? "baja" : "bien"),
-    why: (n) => n >= 38
-      ? `Salió ${n} °C: hay fiebre.`
-      : n <= 35.5
-        ? `Salió ${n} °C: el cuerpo está frío.`
-        : `Salió ${n} °C: temperatura habitual.`,
-  },
-  {
-    key: "respiratoryRate",
-    label: "Respiraciones en un minuto",
-    unit: "",
-    how: "Cuente cuántas veces sube el pecho en 60 segundos.",
-    normal: "12 a 20 en reposo",
-    bad: (n) => (n >= 25 || n <= 8 ? "alterada" : "bien"),
-    why: (n) => (n >= 25 || n <= 8)
-      ? `Salió ${n} por minuto. Fuera de 12–20 el puntaje sube.`
-      : `Salió ${n}: ritmo habitual de reposo.`,
-  },
-];
+function num(raw) {
+  if (raw === "" || raw == null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function inRange(n, pair) {
+  return n >= pair[0] && n <= pair[1];
+}
+
+function itemsFor(age) {
+  const n = ageNorms(age);
+  return [
+    {
+      key: "spo2",
+      label: "Oxígeno en sangre",
+      unit: "%",
+      how: "Clip del dedo (oxímetro).",
+      normal: rangeText(n.spo2, "%") + ` a los ${n.label}`,
+      pair: n.spo2,
+      bad: (v) => (v < 90 ? "muy bajo" : v < n.spo2[0] ? "bajo" : "bien"),
+      why: (v) => v < n.spo2[0]
+        ? `Salió ${v}%. A los ${n.label} lo normal es ${rangeText(n.spo2, "%")}. Por debajo de eso el puntaje sube.`
+        : `Salió ${v}%. En rango para ${n.label}.`,
+    },
+    {
+      key: "heartRate",
+      label: "Pulso (latidos por minuto)",
+      unit: "",
+      how: "En la muñeca o en el oxímetro.",
+      normal: rangeText(n.hr) + ` a los ${n.label}`,
+      pair: n.hr,
+      bad: (v) => (v < n.hr[0] * 0.7 || v > n.hr[1] * 1.3 ? "muy alterado"
+        : !inRange(v, n.hr) ? "fuera de lo habitual para la edad" : "bien"),
+      why: (v) => inRange(v, n.hr)
+        ? `Salió ${v}. Es un pulso de reposo razonable a los ${n.label}.`
+        : `Salió ${v}. A los ${n.label} en reposo suele estar entre ${rangeText(n.hr)}. Eso mueve el puntaje.`,
+    },
+    {
+      key: "systolic",
+      label: "Presión de arriba",
+      unit: "",
+      how: "El número mayor del tensiómetro (ejemplo: en 120/80, este es 120).",
+      normal: rangeText(n.sbp) + ` a los ${n.label}`,
+      pair: n.sbp,
+      bad: (v) => (v < 90 ? "baja" : v > 180 ? "muy alta" : !inRange(v, n.sbp) ? "fuera de lo habitual" : "aceptable"),
+      why: (v) => v < 90
+        ? `Salió ${v}. Baja de 90 puede significar que no llega bien la sangre a los órganos.`
+        : v > 180
+          ? `Salió ${v}. Está muy alta para cualquier edad.`
+          : inRange(v, n.sbp)
+            ? `Salió ${v}. Encaja con ${n.label}.`
+            : `Salió ${v}. A los ${n.label} lo habitual es ${rangeText(n.sbp)}.`,
+    },
+    {
+      key: "diastolic",
+      label: "Presión de abajo",
+      unit: "",
+      how: "El número menor del tensiómetro (en 120/80, este es 80).",
+      normal: rangeText(n.dbp) + ` a los ${n.label}`,
+      pair: n.dbp,
+      bad: (v) => (v < 50 ? "baja" : v > 110 ? "alta" : !inRange(v, n.dbp) ? "fuera de lo habitual" : "aceptable"),
+      why: (v) => `Salió ${v}. A los ${n.label} lo habitual es ${rangeText(n.dbp)}.`,
+    },
+    {
+      key: "temperature",
+      label: "Temperatura",
+      unit: "°C",
+      how: "Termómetro en frente o axila.",
+      normal: rangeText(n.temp, "°C"),
+      pair: n.temp,
+      bad: (v) => (v >= 39 ? "fiebre alta" : v <= 35.5 ? "baja" : "bien"),
+      why: (v) => v >= 38
+        ? `Salió ${v} °C: hay fiebre.`
+        : v <= 35.5
+          ? `Salió ${v} °C: el cuerpo está frío.`
+          : `Salió ${v} °C: temperatura habitual.`,
+    },
+    {
+      key: "respiratoryRate",
+      label: "Respiraciones en un minuto",
+      unit: "",
+      how: "Cuente cuántas veces sube el pecho en 60 segundos.",
+      normal: rangeText(n.rr) + ` a los ${n.label}`,
+      pair: n.rr,
+      bad: (v) => (v < n.rr[0] * 0.5 || v > n.rr[1] * 1.4 ? "alterada"
+        : !inRange(v, n.rr) ? "fuera de lo habitual para la edad" : "bien"),
+      why: (v) => inRange(v, n.rr)
+        ? `Salió ${v}: ritmo de reposo para ${n.label}.`
+        : `Salió ${v}. A los ${n.label} en reposo es ${rangeText(n.rr)}. Fuera de eso el puntaje sube.`,
+    },
+  ];
+}
 
 export function readVitals(patient) {
-  return ITEMS.map((item) => {
-    const raw = patient[item.key];
-    const value = raw === "" || raw == null ? null : Number(raw);
+  const items = itemsFor(patient.age);
+  return items.map((item) => {
+    const value = num(patient[item.key]);
     const estimated = (patient.estimatedFields || []).includes(item.key);
-    if (value == null || Number.isNaN(value)) {
+    if (value == null) {
       return { ...item, value: null, estimated, tone: "muted", badge: "sin dato" };
     }
     const badge = estimated ? "no medido · reposo" : item.bad(value);
@@ -93,18 +108,17 @@ export function readVitals(patient) {
   });
 }
 
-export function vitalHint(key, raw) {
+export function vitalHint(key, raw, age) {
   if (raw === "" || raw == null) return null;
-  const item = ITEMS.find((i) => i.key === key);
+  const item = itemsFor(age).find((i) => i.key === key);
   if (!item) return null;
   const value = Number(raw);
   if (!Number.isFinite(value)) return null;
   const badge = item.bad(value);
   const ok = badge === "bien" || badge === "aceptable";
-  return { badge, ok, text: `${badge} · lo normal: ${item.normal}` };
+  return { badge, ok, text: `${badge} · lo normal a esa edad: ${item.normal}` };
 }
 
-/** Signos tan extremos que un dolor de cabeza no los explica: alguien los midió mal o el paciente está grave de verdad. */
 export function crashSigns(form) {
   return readVitals(form).filter((row) => row.tone === "bad" && !row.estimated && row.value != null);
 }
@@ -113,15 +127,16 @@ export function crashWarning(form) {
   const bad = crashSigns(form);
   if (!bad.length) return "";
   const list = bad.map((r) => `${r.label} ${r.value}${r.unit ? r.unit : ""} (${r.badge}; normal ${r.normal})`).join("; ");
-  return `Estos números no son de un malestar leve: ${list}. `
-    + "Así el puntaje sale crítico aunque el motivo sea “dolor de cabeza”. "
-    + "Si está practicando, use “Signos de un adulto en reposo”. Si los midió de verdad, calcule igual: hay que tratarlo como emergencia.";
+  return `Estos números no son normales para esa edad: ${list}. `
+    + "Así el puntaje sube aunque el motivo sea leve. "
+    + "Si está practicando, use los signos de reposo de esa edad. Si los midió de verdad, calcule igual.";
 }
 
 export function fillRestingIfEmpty(form) {
+  const rest = ageNorms(form.age).rest;
   const estimated = new Set(form.estimatedFields || []);
   const patch = {};
-  for (const [key, value] of Object.entries(RESTING_VITALS)) {
+  for (const [key, value] of Object.entries(rest)) {
     if (form[key] === "" || form[key] == null) {
       patch[key] = String(value);
       estimated.add(key);

@@ -139,7 +139,7 @@ function intakeBody(form) {
     conditionId: form.conditionId || form.lesionId,
     reason: form.reason || form.motivo,
     history,
-    phone: form.phone ? String(form.phone).trim() : null,
+    phone: form.phone && String(form.phone).trim() ? String(form.phone).trim() : null,
     pregnant: (form.sex || form.sexo) === "F" && Boolean(form.pregnant),
     gestationWeeks: (form.sex || form.sexo) === "F" && form.pregnant ? optionalNumber(form.gestationWeeks) : null,
   };

@@ -43,7 +43,7 @@ export function VitalGuide({ patient }) {
   return (
     <div className="sheet vital-guide">
       <h3>Qué significan estos números</h3>
-      <p className="sub">No hace falta ser médico. Lo “normal” es de un adulto en reposo.</p>
+      <p className="sub">Lo “normal” depende de la edad ({patient.age ? `${patient.age} años` : "ponga la edad en el ingreso"}).</p>
       <ul className="vital-read">
         {rows.map((row) => (
           <li key={row.key} className={row.tone}>

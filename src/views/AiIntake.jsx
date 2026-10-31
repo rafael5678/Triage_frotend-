@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { intakeWithAi } from "../services/api";
 import { resizePhoto } from "../models/photo";
 import { VITAL_LABELS } from "../models/levels";
-import { RESTING_VITALS } from "../models/vitals";
+import { ageNorms } from "../models/ageNorms";
 
 const FILLABLE = ["age", "sex", "heartRate", "spo2", "systolic", "diastolic", "temperature", "respiratoryRate", "glucose", "painScale", "consciousness"];
 
@@ -97,7 +97,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
         patch.comorbidityIds = Array.from(new Set([...(form.comorbidityIds || []), ...s.comorbidityIds]));
       }
       const next = { ...form, ...patch };
-      Object.entries(RESTING_VITALS).forEach(([key, value]) => {
+      Object.entries(ageNorms(next.age).rest).forEach(([key, value]) => {
         if (isEmpty(next[key]) && isEmpty(patch[key])) {
           patch[key] = String(value);
           estimated.add(key);
