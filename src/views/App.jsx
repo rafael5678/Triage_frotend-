@@ -124,6 +124,8 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
   const [analyzeBusy, setAnalyzeBusy] = useState(false);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState("");
   const [catalog, setCatalog] = useState([]);
   const [view, setView] = useState("queue");
   const [form, setForm] = useState(EMPTY_FORM);
@@ -297,19 +299,34 @@ export default function App() {
   }
 
   async function confirmEntry() {
+    if (confirmBusy) return;
+    setConfirmBusy(true);
+    setConfirmError("");
     try {
-      const saved = await registerAndScore(result);
-      saved.contributions = result.contributions;
+      const saved = {
+        ...result,
+        ...(await registerAndScore(result)),
+        contributions: result.contributions,
+        immediateActions: result.immediateActions,
+        testsToOrder: result.testsToOrder,
+        monitoring: result.monitoring,
+        redFlags: result.redFlags,
+        geminiReasons: result.geminiReasons,
+        datasetReasons: result.datasetReasons,
+        iaActive: result.iaActive,
+      };
       saved.explanation = explainWhy(saved);
       setPatients((list) => [saved, ...list.filter((p) => p.id !== saved.id)].sort(comparePriority));
       setForm(EMPTY_FORM);
       flash(`${saved.name} quedó en la cola con puntaje ${saved.score}.`);
+      setView("queue");
+      setResult(null);
     } catch (error) {
-      flash(`No se guardó en la base: ${error.message}`);
-      return;
+      setConfirmError(error.message || "No se pudo guardar en la cola.");
+      flash(`No se guardó en la cola: ${error.message}`);
+    } finally {
+      setConfirmBusy(false);
     }
-    setView("queue");
-    setResult(null);
   }
 
   function replacePatient(updated) {
@@ -779,9 +796,12 @@ export default function App() {
                 ))}
               </div>
             </div>
+            {confirmError && <p className="form-err">{confirmError}</p>}
             <div className="row-btns" style={{ marginTop: 16 }}>
-              <button className="btn" onClick={confirmEntry}>Confirmar y poner en la cola</button>
-              <button className="ghost" onClick={() => setView("intake")}>Corregir datos</button>
+              <button className="btn" onClick={confirmEntry} disabled={confirmBusy}>
+                {confirmBusy ? "Guardando en la cola…" : "Confirmar y poner en la cola"}
+              </button>
+              <button className="ghost" onClick={() => setView("intake")} disabled={confirmBusy}>Corregir datos</button>
             </div>
           </section>
         )}

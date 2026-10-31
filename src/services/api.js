@@ -16,7 +16,7 @@ async function request(base, path, options = {}, timeoutMs = 60000) {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || err.message || "Error de API");
+      throw new Error(err.error || err.message || err.detail || `Error ${res.status}`);
     }
     if (res.status === 204) return null;
     const text = await res.text();
@@ -172,8 +172,8 @@ export async function registerAndScore(form) {
   });
   const scored = await request(EVAL_URL, "/api/v1/triage/evaluations", {
     method: "POST",
-    body: JSON.stringify(vitalsBody(form, created.patientId || created.pacienteId || created.id)),
-  }, 90000);
+    body: JSON.stringify(vitalsBody(form, created.patientId || created.pacienteId || created.id, { withPhoto: false })),
+  }, 45000);
   return mapFromApi(scored);
 }
 
