@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COMORBIDITIES } from "../ml/conditions";
 import { featureContributions, getModel, predictScore } from "../ml/model";
-import { comparePriority, createPatient, isElderly, ticketCode } from "../models/patient";
+import { comparePriority, createPatient, documentDigits, documentError, isElderly, ticketCode } from "../models/patient";
 import { explainWhy } from "../models/explain";
 import {
   analyzeTriage, fetchPatients, fetchQueueHealth, fetchSymptoms, finishCare, login as loginRequest, markNotified,
@@ -266,6 +266,11 @@ export default function App() {
   async function analyze(event) {
     event.preventDefault();
     if (!form.conditionId) return;
+    const docMsg = documentError(form.document);
+    if (docMsg || documentDigits(form.document).length < 5) {
+      flash(docMsg || "La cédula o TI debe tener entre 5 y 10 números.");
+      return;
+    }
     const warn = [invertedPressure(form), crashWarning(form)].filter(Boolean).join(" ");
     if (warn && !window.confirm(`${warn}\n\n¿Calcular con estos números?`)) return;
     setAnalyzeBusy(true);
@@ -650,10 +655,12 @@ export default function App() {
                   <input required placeholder="Nombre y apellido" value={form.name} onChange={(e) => setField("name", e.target.value)} />
                 </Field>
                 <Field label="Documento">
-                  <input required placeholder="Cédula o TI" value={form.document} onChange={(e) => setField("document", e.target.value)} />
+                  <input required inputMode="numeric" maxLength={10} placeholder="Cédula, 5 a 10 dígitos" value={form.document} onChange={(e) => setField("document", documentDigits(e.target.value))} />
+                  {documentError(form.document) && <small className="vital-live bad">{documentError(form.document)}</small>}
+                  {!documentError(form.document) && <small className="hint">Solo números. Cédula o TI: mínimo 5, máximo 10.</small>}
                 </Field>
                 <Field className="full" label="WhatsApp (celular colombiano)">
-                  <input type="tel" inputMode="tel" maxLength={20} placeholder="300 123 4567" value={form.phone} onChange={(e) => setField("phone", e.target.value)} />
+                  <input type="tel" inputMode="numeric" maxLength={10} placeholder="3001234567" value={form.phone} onChange={(e) => setField("phone", String(e.target.value || "").replace(/\D/g, "").slice(0, 10))} />
                   <small className={phoneError(form.phone) ? "vital-live bad" : "hint"}>
                     {phoneError(form.phone) || "Solo un celular real de Colombia (10 dígitos, empieza en 3). Al confirmar se manda el turno por WhatsApp."}
                   </small>
@@ -824,9 +831,9 @@ export default function App() {
               <h3>Avisar el turno por WhatsApp</h3>
               <p className="muted">Celular colombiano real. Al confirmar se abre WhatsApp con el turno {result.ticket || ticketCode(result)}, el puesto y el área.</p>
               <Field label="Celular">
-                <input type="tel" inputMode="tel" maxLength={20} placeholder="318 668 0042" value={result.phone || ""} onChange={(e) => {
+                <input type="tel" inputMode="numeric" maxLength={10} placeholder="3186680042" value={result.phone || ""} onChange={(e) => {
                   setConfirmError("");
-                  setResult({ ...result, phone: e.target.value });
+                  setResult({ ...result, phone: String(e.target.value || "").replace(/\D/g, "").slice(0, 10) });
                 }} />
               </Field>
               {isValidWhatsApp(result.phone) && <p className="hint">Este celular sí sirve. Al confirmar se abre WhatsApp con el turno.</p>}

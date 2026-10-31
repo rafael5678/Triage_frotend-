@@ -11,6 +11,18 @@ const LEVEL_ORDER = {
   TRIAGE_V_AZUL: 4,
 };
 
+export function documentDigits(raw) {
+  return String(raw || "").replace(/\D/g, "").slice(0, 10);
+}
+
+export function documentError(raw) {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length < 5) return `Lleva ${digits.length} de 5 a 10 dígitos. Una cédula colombiana no tiene 20 números.`;
+  if (digits.length > 10) return "Máximo 10 dígitos (cédula o TI).";
+  return "";
+}
+
 export function ticketCode(patientOrName, document) {
   const name = typeof patientOrName === "string" ? patientOrName : (patientOrName?.name || "");
   const docRaw = typeof patientOrName === "string" ? document : (patientOrName?.document || "");

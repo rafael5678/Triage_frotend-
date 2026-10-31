@@ -147,7 +147,7 @@ function intakeBody(form) {
   const history = (form.comorbidityIds || form.comorbIds || []).join(", ");
   return {
     name: form.name || form.nombre,
-    document: form.document || form.doc,
+    document: String(form.document || form.doc || "").replace(/\D/g, "").slice(0, 10),
     age: Number(form.age ?? form.edad),
     sex: form.sex || form.sexo,
     conditionId: form.conditionId || form.lesionId,
