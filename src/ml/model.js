@@ -61,7 +61,11 @@ export function predictScore(model, row) {
   const sbp = Number(row.systolic ?? row.pas);
   const rr = Number(row.respiratoryRate ?? row.fr);
   const hr = Number(row.heartRate ?? row.fc);
-  if (spo2 < 85 || sbp < 80 || rr < 8 || hr > 150) p = Math.max(p, 86);
+  const dbp = Number(row.diastolic ?? row.pad);
+  if (spo2 < 85 || sbp < 80 || rr < 8 || hr > 150 || hr < 40) p = Math.max(p, 86);
+  if (hr > 0 && hr < 50) p = Math.max(p, 62);
+  if (sbp >= 180 || dbp >= 120) p = Math.max(p, 42);
+  if (sbp >= 200) p = Math.max(p, 62);
   if ((row.conditionId || row.lesionId) === "paro") p = Math.max(p, 97);
   return Math.min(100, Math.max(0, Math.round(p * 10) / 10));
 }

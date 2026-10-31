@@ -151,6 +151,8 @@ h1, h2, .brand strong {
 .q.v { border-left-color: var(--v); }
 .q.sel { outline: 2px solid var(--teal); }
 .q em { font-family: Fraunces, serif; color: var(--muted); }
+.wa-box { margin-top: 16px; }
+.wa-box h3 { margin-top: 0; }
 .ticket { font-family: Fraunces, serif; letter-spacing: .06em; color: var(--ink); }
 .ticket-xl {
   font-family: Fraunces, serif; font-size: 28px; letter-spacing: .08em;

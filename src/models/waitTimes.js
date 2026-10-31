@@ -39,7 +39,7 @@ export function waitSummary(score, queue = []) {
     ahead,
     sharePercent: waitSharePercent(score),
     text: ahead
-      ? `Hay ${ahead} persona(s) más grave(s) delante. Espera estimada ~${minutes} min.`
-      : `Nadie más grave delante. Meta de atención: ~${target.wait} min (${target.label}).`,
+      ? `Hay ${ahead} persona(s) más grave(s) delante. Meta de espera ~${minutes} min.`
+      : `Nadie más grave delante. Meta de espera ~${target.wait} min (${target.label}). Más alto el puntaje, más urgente (no al revés).`,
   };
 }

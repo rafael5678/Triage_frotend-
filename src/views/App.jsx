@@ -7,7 +7,7 @@ import {
   analyzeTriage, fetchPatients, fetchQueueHealth, fetchSymptoms, finishCare, login as loginRequest, markNotified,
   registerAndScore, reevaluatePatient, setPresence, startCare, subscribeEvents,
 } from "../services/api";
-import { CARE_TARGETS, estimateWaitMinutes, waitSharePercent, waitSummary } from "../models/waitTimes";
+import { CARE_TARGETS, estimateWaitMinutes, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
 import { AVPU } from "../models/levels";
 import { minutesLabel, noticeDue, waitInfo, whatsappLink } from "../models/notice";
@@ -449,8 +449,8 @@ export default function App() {
           <div className="glass glass-wide">
             <span>Cuánto se espera, según qué tan grave esté</span>
             <p className="glass-lead">
-              El puntaje 100 es lo más grave (casi no espera). El 0 es lo más leve (puede esperar más).
-              La barra es el <b>porcentaje de espera</b> respecto a 2 horas: si estás muy herido, el porcentaje es bajo.
+              El puntaje va de 0 a 100: <b>más alto = más grave</b>. 62 es Alta; 8 es Mínima.
+              La barra es la espera en minutos (un caso leve puede esperar más).
             </p>
             <ul className="wait-bands">
               {CARE_TARGETS.map((t) => {
@@ -471,8 +471,7 @@ export default function App() {
             </ul>
             {topWaiting && (
               <p className="glass-now">
-                Más grave ahora: puntaje {topWaiting.score.toFixed(1)} · espera meta ~{estimateWaitMinutes(topWaiting.score, liveQueue.patients)} min
-                ({waitSharePercent(topWaiting.score)}% de una espera larga).
+                Más grave ahora: puntaje {topWaiting.score.toFixed(1)} · espera meta ~{estimateWaitMinutes(topWaiting.score, liveQueue.patients)} min.
               </p>
             )}
             {liveQueue.loading && <small className="glass-status">Consultando la sala… si el servidor está dormido puede tardar hasta un minuto.</small>}
@@ -575,7 +574,7 @@ export default function App() {
                       <b>{Number(p.score).toFixed(1)}</b>
                       <small>meta {p.maxWaitMinutes ?? estimateWaitMinutes(p.score, waiting)} min</small>
                     </div>
-                    <span className="wait">{waitSharePercent(p.score)}%</span>
+                    <span className="wait">~{p.maxWaitMinutes ?? estimateWaitMinutes(p.score, waiting)} min</span>
                   </li>
                 ))}
               </ol>
@@ -588,7 +587,7 @@ export default function App() {
                     <h2>{selected.name}{isElderly(selected) && <span className="elder">65+</span>}</h2>
                     <p className="muted">{selectedExplain.meaning}</p>
                     <p className="scoreline">Puntaje <b>{Number(selected.score).toFixed(1)}</b> / 100</p>
-                    <p className="muted">{waitSummary(selected.score, waiting).text} Porcentaje de espera: {waitSharePercent(selected.score)}% (100% = ~2 horas en un caso leve).</p>
+                    <p className="muted">{waitSummary(selected.score, waiting).text}</p>
                     <DestinationCard patient={selected} compact />
                     <EstimatedWarning fields={selected.estimatedFields} />
                     {selected.immediateActions?.length > 0 && (
@@ -647,6 +646,10 @@ export default function App() {
                 </Field>
                 <Field label="Documento">
                   <input required placeholder="Cédula o TI" value={form.document} onChange={(e) => setField("document", e.target.value)} />
+                </Field>
+                <Field className="full" label="WhatsApp (celular)">
+                  <input type="tel" inputMode="tel" maxLength={20} placeholder="300 123 4567" value={form.phone} onChange={(e) => setField("phone", e.target.value)} />
+                  <small className="hint">Si lo escribe, al confirmar se le manda el turno (ejemplo CM-627) por WhatsApp.</small>
                 </Field>
                 <Field label="Edad">
                   <input required type="number" min="0" max="120" value={form.age} onChange={(e) => setField("age", e.target.value)} />
@@ -712,11 +715,8 @@ export default function App() {
               </div>
 
               <details className="more-box">
-                <summary>Más datos opcionales (celular, glucosa, dolor, enfermedades)</summary>
+                <summary>Más datos opcionales (glucosa, dolor, enfermedades)</summary>
                 <div className="g3" style={{ marginTop: 12 }}>
-                  <Field label="Celular">
-                    <input type="tel" inputMode="tel" maxLength={20} placeholder="300 123 4567" value={form.phone} onChange={(e) => setField("phone", e.target.value)} />
-                  </Field>
                   <Field label="¿Ya está en sala?">
                     <select value={form.present ? "si" : "no"} onChange={(e) => setField("present", e.target.value === "si")}>
                       <option value="si">Sí</option>
@@ -767,8 +767,8 @@ export default function App() {
           <section className="page">
             <h1>Por qué salió este puntaje</h1>
             <p className="sub">
-              El número sale sobre todo de los signos que usted escribió, no del texto “dolor de cabeza”.
-              Gemini solo puede subir un poco el riesgo; nunca baja un caso que ya está grave por oxígeno, pulso o presión.
+              El puntaje es de gravedad: <b>100 es lo más urgente, 0 es lo más leve</b>.
+              62 es Alta; 8 es Mínima. No está al revés. Gemini no puede bajar un caso grave.
             </p>
             {crashWarning(result) && <p className="warn-line">{crashWarning(result)}</p>}
             <div className={`banner ${result.priority.tone}`}>
@@ -778,11 +778,11 @@ export default function App() {
               <div className="banner-copy">
                 <p className="severity-kicker">{result.priority.esi} · {result.priority.name}</p>
                 <p className="ticket-xl">{result.ticket || ticketCode(result)}</p>
-                <h2>{result.score.toFixed(1)} <span>/ 100</span></h2>
+                <h2>{result.score.toFixed(1)} <span>/ 100 de gravedad</span></h2>
                 <p className="danger-lead">{result.explanation.dangerLead}</p>
                 <p>{result.explanation.meaning}</p>
                 <p>{result.explanation.whyQueue}</p>
-                <p>{waitSummary(result.score, waiting).text} Porcentaje de espera: {waitSharePercent(result.score)}% (un caso leve ≈ 100%, un caso crítico ≈ 2%).</p>
+                <p>{waitSummary(result.score, waiting).text}</p>
               </div>
               <DestinationCard patient={result} />
             </div>
@@ -812,6 +812,14 @@ export default function App() {
                   </div>
                 ))}
               </div>
+            </div>
+            <div className="sheet wa-box">
+              <h3>Avisar el turno por WhatsApp</h3>
+              <p className="muted">Ponga el celular del paciente. Al confirmar se abre WhatsApp con el turno {result.ticket || ticketCode(result)}, el puesto y el área.</p>
+              <Field label="Celular">
+                <input type="tel" inputMode="tel" maxLength={20} placeholder="300 123 4567" value={result.phone || ""} onChange={(e) => setResult({ ...result, phone: e.target.value })} />
+              </Field>
+              {!String(result.phone || "").trim() && <p className="warn-line">Sin celular no le llega el mensaje. Puede confirmar igual y avisar después.</p>}
             </div>
             {confirmError && <p className="form-err">{confirmError}</p>}
             <div className="row-btns" style={{ marginTop: 16 }}>
