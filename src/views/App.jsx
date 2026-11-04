@@ -172,6 +172,17 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
+  /** While the tab is open, poke Azure so Container Apps do not scale to zero mid-shift. */
+  useEffect(() => {
+    const ping = () => {
+      if (document.visibilityState !== "visible") return;
+      fetchQueueHealth().catch(() => {});
+    };
+    ping();
+    const t = setInterval(ping, 150000);
+    return () => clearInterval(t);
+  }, []);
+
   /** Cola en vivo: el servidor avisa cuando algo cambió y aquí se vuelve a pedir la lista. */
   useEffect(() => {
     if (!user || user.role === "ADMIN") return undefined;
