@@ -11,7 +11,7 @@ import { estimateWaitMinutes, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
 import { AVPU } from "../models/levels";
 import { isValidWhatsApp, minutesLabel, noticeDue, phoneError, waitInfo, whatsappLink } from "../models/notice";
-import { crashWarning, fillRestingIfEmpty, invertedPressure, vitalHint } from "../models/vitals";
+import { crashWarning, fillRestingIfEmpty, invertedPressure, refreshEstimatedRest, vitalHint } from "../models/vitals";
 import AdminPortal from "./AdminPortal";
 import AiIntake from "./AiIntake";
 import LoginScene from "./LoginScene";
@@ -240,11 +240,19 @@ export default function App() {
   }
 
   function setField(key, value) {
-    setForm((current) => ({
-      ...current,
-      [key]: value,
-      estimatedFields: (current.estimatedFields || []).filter((f) => f !== key),
-    }));
+    setForm((current) => {
+      const estimatedFields = (current.estimatedFields || []).filter((f) => f !== key);
+      const next = { ...current, [key]: value, estimatedFields };
+      if (key === "age") return refreshEstimatedRest(next, value);
+      return next;
+    });
+  }
+
+  function startNewIntake() {
+    setForm(EMPTY_FORM);
+    setResult(null);
+    setView("intake");
+    setMenuOpen(false);
   }
 
   function applyForm(patch) {
@@ -309,6 +317,10 @@ export default function App() {
     const docMsg = documentError(form.document);
     if (docMsg || documentDigits(form.document).length < 5) {
       flash(docMsg || "La cédula o TI debe tener entre 5 y 10 números.");
+      return;
+    }
+    if (Number(form.spo2) > 100) {
+      flash("El oxígeno (SpO2) no puede ser mayor de 100%. Ponga el número del oxímetro, de 0 a 100.");
       return;
     }
     const warn = [invertedPressure(form), crashWarning(form)].filter(Boolean).join(" ");
@@ -530,6 +542,10 @@ export default function App() {
           <p className="nav-label">Operación</p>
           {NAV.slice(0, 3).map(([id, label]) => (
             <button key={id} className={view === id || (id === "intake" && view === "result") ? "on" : ""} onClick={() => {
+              if (id === "intake") {
+                startNewIntake();
+                return;
+              }
               setView(id);
               setMenuOpen(false);
               if (id !== "history" && id !== "patients") {
@@ -586,7 +602,7 @@ export default function App() {
                 <h1>Sala de espera</h1>
                 <p className="sub">Cola ordenada por gravedad · se actualiza en tiempo real</p>
               </div>
-              <button className="btn" onClick={() => setView("intake")}>Nuevo ingreso</button>
+              <button className="btn" onClick={startNewIntake}>Nuevo ingreso</button>
             </div>
             <div className="stats">
               <article><small>En espera</small><b>{waiting.length}</b></article>
@@ -772,7 +788,7 @@ export default function App() {
               </button>
               <div className="g3 vitals-grid">
                 <Field label="Oxígeno %" rangeKey="spo2" age={form.age} ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
-                  <input required type="number" min="0" max="100" placeholder="p. ej. 97" value={form.spo2} onChange={(e) => setField("spo2", e.target.value)} />
+                  <input required type="number" min="0" step="1" placeholder="el número del oxímetro" value={form.spo2} onChange={(e) => setField("spo2", e.target.value)} />
                 </Field>
                 <Field label="Pulso" rangeKey="heartRate" age={form.age} ask="Frecuencia cardiaca (latidos por minuto)" value={form.heartRate} context={caseContext} estimated={form.estimatedFields.includes("heartRate")}>
                   <input required type="number" min="20" max="250" placeholder="p. ej. 72 o 140" value={form.heartRate} onChange={(e) => setField("heartRate", e.target.value)} />

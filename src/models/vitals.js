@@ -18,7 +18,7 @@ function itemsFor(age) {
       label: "Oxígeno en sangre",
       unit: "%",
       how: "Clip del dedo (oxímetro).",
-      normal: rangeText(n.spo2, "%") + ` a los ${n.label}`,
+      normal: `${rangeText(n.spo2, "%")} (${n.label})`,
       pair: n.spo2,
       bad: (v) => oxygenWord(v).badge,
       why: (v) => {
@@ -31,7 +31,7 @@ function itemsFor(age) {
       label: "Pulso (latidos por minuto)",
       unit: "",
       how: "En la muñeca o en el oxímetro.",
-      normal: rangeText(n.hr) + ` a los ${n.label}`,
+      normal: `${rangeText(n.hr)} (${n.label})`,
       pair: n.hr,
       bad: (v) => (v < n.hr[0] * 0.7 || v > n.hr[1] * 1.3 ? "muy alterado"
         : !inRange(v, n.hr) ? "fuera de lo habitual para la edad" : "bien"),
@@ -44,7 +44,7 @@ function itemsFor(age) {
       label: "Presión de arriba",
       unit: "",
       how: "El número mayor del tensiómetro (ejemplo: en 120/80, este es 120).",
-      normal: rangeText(n.sbp) + ` a los ${n.label}`,
+      normal: `${rangeText(n.sbp)} (${n.label})`,
       pair: n.sbp,
       bad: (v) => (v < 90 ? "baja" : v > 180 ? "muy alta" : !inRange(v, n.sbp) ? "fuera de lo habitual" : "aceptable"),
       why: (v) => v < 90
@@ -60,7 +60,7 @@ function itemsFor(age) {
       label: "Presión de abajo",
       unit: "",
       how: "El número menor del tensiómetro (en 120/80, este es 80).",
-      normal: rangeText(n.dbp) + ` a los ${n.label}`,
+      normal: `${rangeText(n.dbp)} (${n.label})`,
       pair: n.dbp,
       bad: (v) => (v < 50 ? "baja" : v > 110 ? "alta" : !inRange(v, n.dbp) ? "fuera de lo habitual" : "aceptable"),
       why: (v) => `Salió ${v}. A los ${n.label} lo habitual es ${rangeText(n.dbp)}.`,
@@ -84,7 +84,7 @@ function itemsFor(age) {
       label: "Respiraciones en un minuto",
       unit: "",
       how: "Cuente cuántas veces sube el pecho en 60 segundos.",
-      normal: rangeText(n.rr) + ` a los ${n.label}`,
+      normal: `${rangeText(n.rr)} (${n.label})`,
       pair: n.rr,
       bad: (v) => (v < n.rr[0] * 0.5 || v > n.rr[1] * 1.4 ? "alterada"
         : !inRange(v, n.rr) ? "fuera de lo habitual para la edad" : "bien"),
@@ -115,9 +115,14 @@ export function vitalHint(key, raw, age) {
   if (!item) return null;
   const value = Number(raw);
   if (!Number.isFinite(value)) return null;
+  if (key === "spo2" && value > 100) {
+    return { badge: "revise el número", ok: false, text: "El oxígeno (SpO2) no pasa de 100%. Si el aparato marcó más, ponga 100 y mida de nuevo." };
+  }
   const badge = item.bad(value);
   const ok = badge === "bien" || badge === "aceptable";
-  return { badge, ok, text: `${badge} · lo normal a esa edad: ${item.normal}` };
+  const years = Number.isFinite(Number(age)) ? Number(age) : null;
+  const who = years == null ? "cuando ponga la edad arriba" : `a los ${years} años`;
+  return { badge, ok, text: `${badge} · lo normal ${who}: ${item.normal}` };
 }
 
 export function crashSigns(form) {
@@ -152,4 +157,15 @@ export function fillRestingIfEmpty(form) {
   }
   patch.estimatedFields = Array.from(estimated);
   return { ...form, ...patch };
+}
+
+/** Si cambia la edad, los signos que aún son de reposo se recalcan para esa edad. */
+export function refreshEstimatedRest(form, age) {
+  const rest = ageNorms(age).rest;
+  const estimated = new Set(form.estimatedFields || []);
+  const next = { ...form, age };
+  for (const [key, value] of Object.entries(rest)) {
+    if (estimated.has(key)) next[key] = String(value);
+  }
+  return next;
 }

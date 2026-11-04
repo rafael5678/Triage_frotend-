@@ -3,8 +3,10 @@ import { intakeWithAi } from "../services/api";
 import { resizePhoto } from "../models/photo";
 import { VITAL_LABELS } from "../models/levels";
 import { ageNorms } from "../models/ageNorms";
+import { refreshEstimatedRest } from "../models/vitals";
 
 const FILLABLE = ["age", "sex", "heartRate", "spo2", "systolic", "diastolic", "temperature", "respiratoryRate", "glucose", "painScale", "consciousness"];
+const STORY_WINS = ["age", "sex"];
 
 function isEmpty(value) {
   return value === "" || value === null || value === undefined;
@@ -69,6 +71,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
     try {
       const known = {};
       FILLABLE.forEach((key) => {
+        if (STORY_WINS.includes(key)) return;
         if (!isEmpty(form[key]) && !(form.estimatedFields || []).includes(key)) known[key] = form[key];
       });
       if (form.conditionId) known.conditionId = form.conditionId;
@@ -85,13 +88,14 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
       FILLABLE.forEach((key) => {
         const value = s[key];
         if (isEmpty(value)) return;
-        if (isEmpty(form[key]) || estimated.has(key)) {
+        const leftover = STORY_WINS.includes(key);
+        if (leftover || isEmpty(form[key]) || estimated.has(key)) {
           patch[key] = String(value);
           if (s.estimatedFields?.includes(key)) estimated.add(key);
           else estimated.delete(key);
         }
       });
-      if (!form.conditionId && s.conditionId) patch.conditionId = s.conditionId;
+      if (s.conditionId) patch.conditionId = s.conditionId;
       if (!form.reason && s.reason) patch.reason = s.reason;
       if (s.comorbidityIds?.length) {
         patch.comorbidityIds = Array.from(new Set([...(form.comorbidityIds || []), ...s.comorbidityIds]));
@@ -104,6 +108,9 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
         }
       });
       patch.estimatedFields = Array.from(estimated);
+      if (patch.age) {
+        Object.assign(patch, refreshEstimatedRest({ ...form, ...patch }, patch.age));
+      }
       onApply(patch);
       setNotes({ notes: s.notes || [], photoFindings: s.photoFindings, estimated: patch.estimatedFields });
       flash(estimated.size
