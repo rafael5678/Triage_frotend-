@@ -176,7 +176,7 @@ function intakeBody(form) {
     age: Number(form.age ?? form.edad),
     sex: form.sex || form.sexo,
     conditionId: form.conditionId || form.lesionId,
-    reason: form.reason || form.motivo || form.story || "",
+    reason: String(form.reason || form.motivo || form.story || "").slice(0, 500),
     history,
     phone: form.phone && String(form.phone).trim() ? String(form.phone).trim() : null,
     pregnant: (form.sex || form.sexo) === "F" && Boolean(form.pregnant),
@@ -233,9 +233,10 @@ export async function analyzeTriage(form, localModelScore) {
     body: JSON.stringify({
       ...intakeBody(form),
       ...vitalsBody(form),
+      reason: String(form.reason || form.motivo || form.story || "").slice(0, 2000),
       localModelScore: localModelScore == null ? null : Number(localModelScore),
     }),
-  }, 90000);
+  }, 120000);
   return mapFromApi(scored);
 }
 

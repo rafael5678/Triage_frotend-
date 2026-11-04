@@ -83,7 +83,7 @@ export default function Recommendations({ patient }) {
       </div>
       {patient.symptomExplanation && (
         <div className="reco-block">
-          <h4>Por qué importan estos síntomas</h4>
+          <h4>Qué interpreta la IA (relato, signos y foto)</h4>
           <p>{patient.symptomExplanation}</p>
         </div>
       )}

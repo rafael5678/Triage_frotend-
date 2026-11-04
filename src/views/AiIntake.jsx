@@ -127,7 +127,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
     <div className="ai-intake">
       <div className="ai-intake-head">
         <h3><span className="step-num">1</span> ¿Qué está pasando?</h3>
-        <p className="sub">Díctelo o escríbalo. Gemini completa edad, motivo y signos. Si hay herida, agregue foto.</p>
+        <p className="sub">Díctelo o escríbalo. La IA lee el relato, los signos y la foto (si hay) para armar el caso. No hace falta escribir la causa: ella la interpreta.</p>
       </div>
       <textarea
         rows="3"

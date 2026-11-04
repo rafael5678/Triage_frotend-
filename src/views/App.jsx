@@ -878,7 +878,7 @@ export default function App() {
                 </div>
               </details>
               {intakeError && <p className="form-err">{intakeError}</p>}
-              <button className="btn wide" type="submit" disabled={analyzeBusy}>{analyzeBusy ? "Calculando con el protocolo y Gemini…" : "Calcular puntaje"}</button>
+              <button className="btn wide" type="submit" disabled={analyzeBusy}>{analyzeBusy ? "La IA está leyendo signos, relato y foto…" : "Calcular puntaje"}</button>
             </form>
           </section>
         )}
@@ -888,7 +888,8 @@ export default function App() {
             <h1>Por qué salió este puntaje</h1>
             <p className="sub">
               El puntaje es de gravedad: <b>100 es lo más urgente, 0 es lo más leve</b>.
-              78 es Crítica, 62 Alta, 42 Media, 22 Baja, 8 Mínima. No está al revés. Gemini no puede bajar un caso grave.
+              78 es Crítica, 62 Alta, 42 Media, 22 Baja, 8 Mínima. No está al revés.
+              Gemini lee pulso, oxígeno, el resto de signos, el relato y la foto; no puede bajar un caso grave.
             </p>
             {crashWarning(result) && <p className="warn-line">{crashWarning(result)}</p>}
             <div className={`banner ${result.priority.tone}`}>
@@ -919,11 +920,15 @@ export default function App() {
               </div>
               <div className="sheet">
                 <h3>Criterio de Gemini</h3>
-                {result.iaActive && result.geminiScore != null && <p className="muted">Puntaje que sugiere la IA: {Number(result.geminiScore).toFixed(1)}</p>}
+                {result.iaActive && result.geminiScore != null && <p className="muted">Puntaje que sugiere la IA: {Number(result.geminiScore).toFixed(1)} / 100</p>}
                 {!result.iaActive && <p className="muted">Gemini no respondió esta vez (puede estar saturado). Se usó solo el protocolo; puede volver a calcular en un momento.</p>}
+                {result.iaActive && result.photoFindings && <p><b>En la foto:</b> {result.photoFindings}</p>}
                 <ul className="why-list big">
                   {(result.geminiReasons || []).map((r) => <li key={r}>{r}</li>)}
                 </ul>
+                {result.iaActive && !(result.geminiReasons || []).length && (
+                  <p className="muted">La IA no devolvió frases sueltas; vea las recomendaciones abajo.</p>
+                )}
                 {(result.contributions || []).filter((f) => Math.abs(f.weight) >= 0.5).slice(0, 4).map((f) => (
                   <div key={f.id} className="barline">
                     <span>{f.name}</span>
@@ -1079,7 +1084,7 @@ export default function App() {
           <section className="page">
             <h1>Cómo se calcula</h1>
             <p className="sub">
-              El puntaje de la cola sale del protocolo (NEWS2, signos, motivo y enfermedades) y, si hay llave configurada, Gemini puede subir un poco el riesgo si el relato clínico lo justifica. Nunca lo baja si los signos ya están graves.
+              El puntaje de la cola sale del protocolo (NEWS2, signos, motivo y enfermedades). Gemini lee también el relato y la foto y puede subir el riesgo si el conjunto lo justifica. Nunca lo baja si los signos ya están graves.
               El gráfico de abajo es el modelo local de referencia ({pack.train.length} ejemplos; error medio {pack.metrics.mae} puntos).
             </p>
             <div className="split">
@@ -1096,7 +1101,7 @@ export default function App() {
               <div className="sheet">
                 <h3>Quién pasa primero</h3>
                 <ol className="steps">
-                  <li>Se leen oxígeno, pulso, presión, temperatura, respiración, edad, motivo y enfermedades previas.</li>
+                  <li>Se leen oxígeno, pulso, presión, temperatura, respiración, edad, motivo, relato, foto (si hay) y enfermedades previas.</li>
                   <li>Sale un puntaje de 0 (más estable) a 100 (más grave).</li>
                   <li>La lista se ordena por gravedad (nivel de triaje y puntaje). Si el nivel es el mismo, pasa quien tiene 65 años o más. Si aún empatan, gana quien llegó antes. Un joven más grave siempre va delante de un adulto mayor más estable.</li>
                   <li>Si se vuelven a tomar los signos y empeoran, el puntaje sube y puede adelantar.</li>

@@ -1,5 +1,5 @@
-/** Reduce la foto a máx. 1024 px y JPEG para que viaje liviana a la IA (unos cientos de KB). */
-export function resizePhoto(file, maxSide = 1024, quality = 0.8) {
+/** Reduce la foto a máx. 1280 px y JPEG para que la IA la lea bien sin saturar la red. */
+export function resizePhoto(file, maxSide = 1280, quality = 0.85) {
   return new Promise((resolve, reject) => {
     if (!file || !file.type?.startsWith("image/")) {
       reject(new Error("El archivo no es una imagen."));
