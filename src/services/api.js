@@ -139,9 +139,33 @@ export function mapFromApi(row) {
   };
 }
 
+function uniqueByPatient(rows) {
+  const rank = (status) => {
+    if (status === "En atención" || status === "EN_ATENCION") return 4;
+    if (status === "En espera" || status === "EN_ESPERA") return 3;
+    if (status === "Atendido" || status === "ATENDIDO") return 2;
+    return 1;
+  };
+  const latest = new Map();
+  for (const row of rows) {
+    if (!row?.id) continue;
+    const prev = latest.get(row.id);
+    if (!prev) {
+      latest.set(row.id, row);
+      continue;
+    }
+    const betterStatus = rank(row.status) > rank(prev.status);
+    const newer = (row.evaluatedAt || row.arrivedAt || 0) > (prev.evaluatedAt || prev.arrivedAt || 0);
+    if (betterStatus || (!betterStatus && rank(row.status) === rank(prev.status) && newer)) {
+      latest.set(row.id, row);
+    }
+  }
+  return Array.from(latest.values());
+}
+
 export async function fetchPatients() {
   const rows = await request(QUEUE_URL, "/api/v1/triage/patients");
-  return rows.map(mapFromApi);
+  return uniqueByPatient((rows || []).map(mapFromApi));
 }
 
 function intakeBody(form) {
@@ -225,10 +249,15 @@ export async function reevaluatePatient(id, form) {
 
 export async function startCare(id) {
   const path = `/api/v1/triage/care/${id}`;
+  const viaEval = `/api/v1/triage/evaluations/${id}/status?status=EN_ATENCION`;
   try {
     return mapFromApi(await request(QUEUE_URL, path, { method: "PATCH" }, 90000));
-  } catch (error) {
-    return mapFromApi(await request(QUEUE_URL, path, { method: "POST" }, 90000));
+  } catch {
+    try {
+      return mapFromApi(await request(QUEUE_URL, path, { method: "POST" }, 90000));
+    } catch {
+      return mapFromApi(await request(EVAL_URL, viaEval, { method: "PATCH" }, 90000));
+    }
   }
 }
 

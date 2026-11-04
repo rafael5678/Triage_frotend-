@@ -410,6 +410,7 @@ export default function App() {
       replacePatient(updated);
       const minutes = updated.careStartedAt ? Math.round((updated.careStartedAt - updated.arrivedAt) / 60000) : null;
       flash(`Pasa a atención${minutes != null ? ` después de ${minutesLabel(minutes)} de espera` : ""}.`);
+      try { setPatients(await fetchPatients()); } catch { /* keep local status */ }
     } catch (error) {
       if (previous) replacePatient(previous);
       else {
@@ -626,6 +627,17 @@ export default function App() {
                       </small>
                       <WaitBadges patient={p} now={now} />
                     </div>
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={careBusy}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        moveToCare(p.id);
+                      }}
+                    >
+                      {careBusy ? "Pasando…" : "Pasar a atención"}
+                    </button>
                     <span className={`score-tile ${p.priority.tone}`}>{Math.round(p.score)}</span>
                     <Chip priority={p.priority} />
                     <div className="sc">
@@ -954,7 +966,12 @@ export default function App() {
                       </td>
                       <td className="row-btns">
                         {p.status === "En atención" && <button className="ghost" onClick={() => closeCare(p.id, "ATENDIDO")}>Terminar atención</button>}
-                        {p.status === "En espera" && <button className="text" onClick={() => closeCare(p.id, "CANCELADO")}>Se fue</button>}
+                        {p.status === "En espera" && (
+                          <>
+                            <button className="btn" onClick={() => moveToCare(p.id)} disabled={careBusy}>Pasar a atención</button>
+                            <button className="text" onClick={() => closeCare(p.id, "CANCELADO")}>Se fue</button>
+                          </>
+                        )}
                         <button className="text" onClick={() => { setHistoryFor(p); setView("history"); }}>Evolución</button>
                       </td>
                     </tr>

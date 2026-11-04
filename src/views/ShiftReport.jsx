@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LEVELS } from "../models/levels";
 import { waitInfo } from "../models/notice";
+import { fetchPatients } from "../services/api";
 
 const SHIFTS = [
   { id: "manana", label: "Mañana (7:00–13:00)", from: 7, hours: 6 },
@@ -65,23 +66,30 @@ function csvCell(value) {
 export default function ShiftReport({ patients, conditionLabel, user }) {
   const [shiftId, setShiftId] = useState(currentShift());
   const [date, setDate] = useState(todayIso());
+  const [livePatients, setLivePatients] = useState(patients);
   const { start, end, shift } = windowOf(shiftId, date);
+
+  useEffect(() => { setLivePatients(patients); }, [patients]);
+  useEffect(() => {
+    fetchPatients().then(setLivePatients).catch(() => {});
+  }, []);
 
   const report = useMemo(() => {
     const day = dayWindow(date);
-    const rows = patients
+    const source = livePatients || [];
+    const rows = source
       .filter((p) => {
         const at = arrivedMs(p);
         return at >= start && at < end;
       })
       .sort((a, b) => arrivedMs(a) - arrivedMs(b));
-    const todayRows = patients
+    const todayRows = source
       .filter((p) => {
         const at = arrivedMs(p);
         return at >= day.start && at < day.end;
       })
       .sort((a, b) => arrivedMs(a) - arrivedMs(b));
-    const carryover = patients
+    const carryover = source
       .filter((p) => stillInHospital(p) && arrivedMs(p) && arrivedMs(p) < start)
       .sort((a, b) => arrivedMs(a) - arrivedMs(b));
     const now = Date.now();
@@ -114,7 +122,7 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
       cancelled: rows.filter((p) => p.status === "Cancelado").length,
       estimated: rows.filter((p) => p.estimatedFields?.length).length,
     };
-  }, [patients, start, end]);
+  }, [livePatients, start, end, date]);
 
   function downloadCsv() {
     const header = ["Llegada", "Nombre", "Documento", "Edad", "Sexo", "Motivo", "Puntaje", "Nivel", "Área", "Código",
