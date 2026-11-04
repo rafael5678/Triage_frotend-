@@ -23,7 +23,7 @@ function clamp(n, min, max) {
 
 export function news2Score(v) {
   const rr = Number(v.respiratoryRate ?? v.fr);
-  const spo2 = Number(v.spo2);
+  const spo2 = Math.min(100, Number(v.spo2));
   const temp = Number(v.temperature ?? v.temp);
   const sbp = Number(v.systolic ?? v.pas);
   const hr = Number(v.heartRate ?? v.fc);

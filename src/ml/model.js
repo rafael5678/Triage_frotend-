@@ -58,7 +58,7 @@ export function predictScore(model, row) {
   const x = toFeatures(row);
   let p = model.bias;
   for (const t of model.trees) p += model.lr * stumpPredict(t, x);
-  const spo2 = Number(row.spo2);
+  const spo2 = Math.min(100, Number(row.spo2));
   const sbp = Number(row.systolic ?? row.pas);
   const rr = Number(row.respiratoryRate ?? row.fr);
   const hr = Number(row.heartRate ?? row.fc);

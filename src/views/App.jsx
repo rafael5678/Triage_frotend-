@@ -333,8 +333,13 @@ export default function App() {
       const msg = "Falta el oxígeno.";
       setIntakeError(msg); flash(msg); return;
     }
-    if (spo2 > 100) {
-      const msg = "El oxígeno (SpO2) no puede ser mayor de 100%. El 100 sí es válido.";
+    if (spo2 < 0 || spo2 > 190) {
+      const msg = "El oxígeno debe estar entre 0 y 190 (el número que marcó el oxímetro).";
+      setIntakeError(msg); flash(msg); return;
+    }
+    const hr = Number(form.heartRate);
+    if (Number.isFinite(hr) && (hr < 20 || hr > 250)) {
+      const msg = "El pulso debe estar entre 20 y 250.";
       setIntakeError(msg); flash(msg); return;
     }
     const needed = [
@@ -809,7 +814,7 @@ export default function App() {
               </button>
               <div className="g3 vitals-grid">
                 <Field label="Oxígeno %" rangeKey="spo2" age={form.age} ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
-                  <input required type="number" min="0" step="1" placeholder="el número del oxímetro" value={form.spo2} onChange={(e) => setField("spo2", e.target.value)} />
+                  <input required type="number" min="0" max="190" step="1" placeholder="el número del oxímetro" value={form.spo2} onChange={(e) => setField("spo2", e.target.value)} />
                 </Field>
                 <Field label="Pulso" rangeKey="heartRate" age={form.age} ask="Frecuencia cardiaca (latidos por minuto)" value={form.heartRate} context={caseContext} estimated={form.estimatedFields.includes("heartRate")}>
                   <input required type="number" min="20" max="250" placeholder="p. ej. 72 o 140" value={form.heartRate} onChange={(e) => setField("heartRate", e.target.value)} />
@@ -958,8 +963,8 @@ export default function App() {
             <form className="sheet" onSubmit={applyRecheck}>
               <p><b>{recheck.name}</b></p>
               <div className="g3">
-                <Field label="Oxígeno %"><input type="number" value={recheck.spo2} onChange={(e) => setRecheck({ ...recheck, spo2: e.target.value })} /></Field>
-                <Field label="Latidos"><input type="number" value={recheck.heartRate} onChange={(e) => setRecheck({ ...recheck, heartRate: e.target.value, fc: e.target.value })} /></Field>
+                <Field label="Oxígeno %"><input type="number" min="0" max="190" value={recheck.spo2} onChange={(e) => setRecheck({ ...recheck, spo2: e.target.value })} /></Field>
+                <Field label="Latidos"><input type="number" min="20" max="250" value={recheck.heartRate} onChange={(e) => setRecheck({ ...recheck, heartRate: e.target.value, fc: e.target.value })} /></Field>
                 <Field label="Presión arriba"><input type="number" value={recheck.systolic} onChange={(e) => setRecheck({ ...recheck, systolic: e.target.value, pas: e.target.value })} /></Field>
                 <Field label="Presión abajo"><input type="number" value={recheck.diastolic} onChange={(e) => setRecheck({ ...recheck, diastolic: e.target.value, pad: e.target.value })} /></Field>
                 <Field label="Temperatura"><input type="number" step="0.1" value={recheck.temperature} onChange={(e) => setRecheck({ ...recheck, temperature: e.target.value, temp: e.target.value })} /></Field>

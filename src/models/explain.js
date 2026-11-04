@@ -2,6 +2,7 @@ import { findSymptom } from "./catalog";
 import { CONDITIONS } from "../ml/conditions";
 import { news2Score } from "../ml/dataset";
 import { priorityFromScore } from "../ml/model";
+import { ageNorms, rangeText } from "./ageNorms";
 
 function num(v) {
   return Number(v);
@@ -23,13 +24,20 @@ export function explainWhy(patient) {
   const news = news2Score(patient);
 
   const estimated = new Set(patient.estimatedFields || []);
+  const n = ageNorms(age);
   const reasons = [];
-  if (spo2 < 90) reasons.push(`El oxígeno en la sangre está muy bajo (${spo2}%). Lo normal es 95 a 100. Eso sube mucho el puntaje.`);
-  else if (spo2 < 94) reasons.push(`El oxígeno está un poco bajo (${spo2}%). Lo normal es 95 a 100.`);
-  else if (spo2 >= 95) reasons.push(`El oxígeno está en un rango aceptable (${spo2}%).`);
+  if (spo2 > 100) reasons.push(`Pusieron oxígeno ${spo2}. A los ${n.label} lo habitual es 95 a 100. Se guarda el número que midieron.`);
+  else if (spo2 < 90) reasons.push(`El oxígeno en la sangre está muy bajo (${spo2}%). Lo normal a los ${n.label} es 95 a 100. Eso sube mucho el puntaje.`);
+  else if (spo2 < 94) reasons.push(`El oxígeno está un poco bajo (${spo2}%). Lo normal a los ${n.label} es 95 a 100.`);
+  else if (spo2 >= 95) reasons.push(`El oxígeno está en un rango aceptable (${spo2}%). A los ${n.label} lo habitual es 95 a 100.`);
 
-  if (hr > 130 || hr < 40) reasons.push(`El corazón va muy alterado (${hr} latidos por minuto). En un adulto suele estar entre 60 y 100.`);
-  else if (hr > 110 || hr < 50) reasons.push(`El pulso no está en el rango habitual (${hr} latidos por minuto).`);
+  if (hr > n.hr[1] * 1.3 || hr < n.hr[0] * 0.7) {
+    reasons.push(`El corazón va muy alterado (${hr} latidos por minuto). A los ${n.label} en reposo suele estar entre ${rangeText(n.hr)}.`);
+  } else if (hr > n.hr[1] || hr < n.hr[0]) {
+    reasons.push(`El pulso no está en el rango habitual (${hr}). A los ${n.label} en reposo suele estar entre ${rangeText(n.hr)}.`);
+  } else if (Number.isFinite(hr)) {
+    reasons.push(`El pulso (${hr}) encaja con lo habitual a los ${n.label} (${rangeText(n.hr)}).`);
+  }
 
   if (sbp < 90) reasons.push(`La presión está baja (${sbp}/${dbp}). Eso puede significar que el cuerpo no está bombeando bien.`);
   else if (sbp > 180) reasons.push(`La presión está muy alta (${sbp}/${dbp}).`);

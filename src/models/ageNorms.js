@@ -70,6 +70,8 @@ export function rangeText(pair, unit = "") {
 export function oxygenWord(value) {
   const v = Number(value);
   if (!Number.isFinite(v)) return { badge: "", ok: true, detail: "" };
+  if (v > 190) return { badge: "revise el número", ok: false, detail: "Más de 190 no se acepta." };
+  if (v > 100) return { badge: "así lo midieron", ok: true, detail: "Se guarda el número del oxímetro. Lo habitual es 95 a 100%." };
   if (v >= 95) return { badge: "bien", ok: true, detail: "95 a 100 es lo normal a cualquier edad." };
   if (v >= 92) return { badge: "un poco bajo", ok: false, detail: "Ya bajó de 95. Hay que repetir el clip y vigilar." };
   if (v >= 90) return { badge: "bajo · ya no es normal", ok: false, detail: "91 o menos no es normal. El puntaje sube." };

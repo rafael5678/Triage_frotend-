@@ -115,8 +115,10 @@ export function vitalHint(key, raw, age) {
   if (!item) return null;
   const value = Number(raw);
   if (!Number.isFinite(value)) return null;
-  if (key === "spo2" && value > 100) {
-    return { badge: "revise el número", ok: false, text: "Más de 100% no es saturación. El 100 sí vale; si marcó más, ponga 100." };
+  if (key === "spo2" && value > 100 && value <= 190) {
+    const years = Number.isFinite(Number(age)) ? Number(age) : null;
+    const who = years == null ? "esa edad" : `los ${years} años`;
+    return { badge: "arriba de 100", ok: true, text: `Se guarda ${value} como lo midió. Lo habitual a ${who} es 95 a 100%.` };
   }
   const badge = item.bad(value);
   const ok = badge === "bien" || badge === "aceptable";
