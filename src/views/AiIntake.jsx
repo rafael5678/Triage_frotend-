@@ -101,7 +101,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
         patch.comorbidityIds = Array.from(new Set([...(form.comorbidityIds || []), ...s.comorbidityIds]));
       }
       const next = { ...form, ...patch };
-      Object.entries(ageNorms(next.age).rest).forEach(([key, value]) => {
+      Object.entries(ageNorms(next.age, { pregnant: form.pregnant, weeks: form.gestationWeeks }).rest).forEach(([key, value]) => {
         if (isEmpty(next[key]) && isEmpty(patch[key])) {
           patch[key] = String(value);
           estimated.add(key);

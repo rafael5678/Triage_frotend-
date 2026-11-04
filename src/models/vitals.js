@@ -10,8 +10,18 @@ function inRange(n, pair) {
   return n >= pair[0] && n <= pair[1];
 }
 
-function itemsFor(age) {
-  const n = ageNorms(age);
+function pregOf(patientOrFlag) {
+  if (patientOrFlag && typeof patientOrFlag === "object") {
+    return {
+      pregnant: Boolean(patientOrFlag.pregnant),
+      weeks: patientOrFlag.gestationWeeks ?? patientOrFlag.weeks,
+    };
+  }
+  return { pregnant: Boolean(patientOrFlag) };
+}
+
+function itemsFor(age, extra) {
+  const n = ageNorms(age, extra);
   return [
     {
       key: "spo2",
@@ -96,7 +106,7 @@ function itemsFor(age) {
 }
 
 export function readVitals(patient) {
-  const items = itemsFor(patient.age);
+  const items = itemsFor(patient.age, pregOf(patient));
   return items.map((item) => {
     const value = num(patient[item.key]);
     const estimated = (patient.estimatedFields || []).includes(item.key);
@@ -109,9 +119,10 @@ export function readVitals(patient) {
   });
 }
 
-export function vitalHint(key, raw, age) {
+export function vitalHint(key, raw, age, pregnant, weeks) {
   if (raw === "" || raw == null) return null;
-  const item = itemsFor(age).find((i) => i.key === key);
+  const extra = typeof pregnant === "object" ? pregnant : { pregnant, weeks };
+  const item = itemsFor(age, extra).find((i) => i.key === key);
   if (!item) return null;
   const value = Number(raw);
   if (!Number.isFinite(value)) return null;
@@ -148,7 +159,7 @@ export function crashWarning(form) {
 }
 
 export function fillRestingIfEmpty(form) {
-  const rest = ageNorms(form.age).rest;
+  const rest = ageNorms(form.age, pregOf(form)).rest;
   const estimated = new Set(form.estimatedFields || []);
   const patch = {};
   for (const [key, value] of Object.entries(rest)) {
@@ -163,7 +174,7 @@ export function fillRestingIfEmpty(form) {
 
 /** Si cambia la edad, los signos que aún son de reposo se recalcan para esa edad. */
 export function refreshEstimatedRest(form, age) {
-  const rest = ageNorms(age).rest;
+  const rest = ageNorms(age, pregOf(form)).rest;
   const estimated = new Set(form.estimatedFields || []);
   const next = { ...form, age };
   for (const [key, value] of Object.entries(rest)) {

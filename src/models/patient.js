@@ -23,6 +23,44 @@ export function documentError(raw) {
   return "";
 }
 
+/**
+ * Guía según la edad. Nunca bloquea: en Colombia conviven NUIP de 10 dígitos (suelen
+ * empezar en 1, p. ej. 10…) y cédulas antiguas más cortas o con prefijo 50–69.
+ */
+export function documentAgeHint(raw, age) {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (digits.length < 5 || digits.length > 10) return "";
+  const n = Number(age);
+  if (!Number.isFinite(n)) {
+    return "5 a 10 dígitos. Jóvenes: casi siempre 10 que empiezan en 1. Mayores: a veces 6–8 dígitos o prefijo 50–69.";
+  }
+  if (n < 18) {
+    if (digits.startsWith("1") && digits.length >= 8) {
+      return "TI habitual en menores: 8 a 10 dígitos, muchas empiezan en 1. Se acepta.";
+    }
+    return "En menores suele ser tarjeta de identidad (a menudo 10 dígitos que empiezan en 1). Si es el número real, se acepta.";
+  }
+  if (n < 40) {
+    if (digits.length === 10 && digits.startsWith("1")) {
+      return `Cédula NUIP de 10 dígitos (como las que empiezan en 10…): encaja con ${n} años.`;
+    }
+    if (digits.length <= 8) {
+      return `A los ${n} años lo más habitual es cédula de 10 dígitos que empieza en 1. Si el número es real, se guarda igual.`;
+    }
+    return `Cédula de ${digits.length} dígitos. A esta edad suele ser NUIP de 10 que empieza en 1; se acepta tal cual.`;
+  }
+  if (/^(5\d|6\d)/.test(digits) && digits.length >= 6) {
+    return `Prefijo de cédula antigua (50–69): frecuente en adultas mayores. Encaja con ${n} años.`;
+  }
+  if (digits.length <= 8) {
+    return `Cédula corta de generación anterior: frecuente pasados los 40. Se acepta.`;
+  }
+  if (digits.length === 10 && digits.startsWith("1")) {
+    return "Cédula renovada (NUIP de 10 dígitos). También es válida a esta edad.";
+  }
+  return `Cédula de ${digits.length} dígitos. En mayores de 40 hay de todo: cortas, 50–69 o NUIP de 10. Se acepta.`;
+}
+
 export function ticketCode(patientOrName, document) {
   const name = typeof patientOrName === "string" ? patientOrName : (patientOrName?.name || "");
   const docRaw = typeof patientOrName === "string" ? document : (patientOrName?.document || "");

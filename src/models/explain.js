@@ -24,7 +24,7 @@ export function explainWhy(patient) {
   const news = news2Score(patient);
 
   const estimated = new Set(patient.estimatedFields || []);
-  const n = ageNorms(age);
+  const n = ageNorms(age, { pregnant: Boolean(patient.pregnant), weeks: patient.gestationWeeks });
   const reasons = [];
   if (spo2 > 100) reasons.push(`Pusieron oxígeno ${spo2}. A los ${n.label} lo habitual es 95 a 100. Se guarda el número que midieron.`);
   else if (spo2 < 90) reasons.push(`El oxígeno en la sangre está muy bajo (${spo2}%). Lo normal a los ${n.label} es 95 a 100. Eso sube mucho el puntaje.`);

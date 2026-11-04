@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COMORBIDITIES } from "../ml/conditions";
 import { featureContributions, getModel, predictScore } from "../ml/model";
-import { comparePriority, createPatient, documentDigits, documentError, isElderly, ticketCode } from "../models/patient";
+import { comparePriority, createPatient, documentAgeHint, documentDigits, documentError, isElderly, ticketCode } from "../models/patient";
 import { explainWhy } from "../models/explain";
 import {
   analyzeTriage, fetchPatients, fetchQueueHealth, fetchSymptoms, finishCare, login as loginRequest, markNotified,
@@ -106,8 +106,8 @@ function Chip({ priority }) {
 }
 
 /** ask: nombre del dato para que la IA lo explique; estimated: el valor lo puso la IA y falta medirlo. */
-function Field({ label, help, children, className, ask, value, context, estimated, rangeKey, age }) {
-  const hint = rangeKey ? vitalHint(rangeKey, value, age) : null;
+function Field({ label, help, children, className, ask, value, context, estimated, rangeKey, age, pregnant }) {
+  const hint = rangeKey ? vitalHint(rangeKey, value, age, pregnant) : null;
   return (
     <div className={`field ${className || ""} ${estimated ? "is-estimated" : ""}`.trim()}>
       <span className="label-row">
@@ -159,7 +159,6 @@ export default function App() {
   const [historyFor, setHistoryFor] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const reloadTimer = useRef(null);
-  const confirmLock = useRef(false);
 
   const waiting = useMemo(
     () => patients.filter((p) => p.status === "En espera").sort(comparePriority),
@@ -244,7 +243,9 @@ export default function App() {
     setForm((current) => {
       const estimatedFields = (current.estimatedFields || []).filter((f) => f !== key);
       const next = { ...current, [key]: value, estimatedFields };
-      if (key === "age") return refreshEstimatedRest(next, value);
+      if (key === "age" || key === "pregnant" || key === "gestationWeeks") {
+        return refreshEstimatedRest(next, next.age);
+      }
       return next;
     });
   }
@@ -252,6 +253,8 @@ export default function App() {
   function startNewIntake() {
     setForm(EMPTY_FORM);
     setResult(null);
+    setConfirmBusy(false);
+    setConfirmError("");
     setView("intake");
     setMenuOpen(false);
   }
@@ -297,7 +300,6 @@ export default function App() {
 
   function logout() {
     sessionStorage.removeItem(SESSION_KEY);
-    confirmLock.current = false;
     setUser(null);
     setPatients([]);
     setCatalog([]);
@@ -382,19 +384,37 @@ export default function App() {
   }
 
   async function confirmEntry() {
-    if (confirmBusy || confirmLock.current) return;
+    if (confirmBusy) {
+      flash("Ya se está guardando en la cola…");
+      return;
+    }
     const wa = phoneError(result.phone);
     if (String(result.phone || "").trim() && wa) {
       setConfirmError(wa);
+      flash(wa);
       return;
     }
-    confirmLock.current = true;
     setConfirmBusy(true);
     setConfirmError("");
     try {
+      const payload = {
+        ...result,
+        ...toPayload(form.name ? form : result),
+        name: (result.name || form.name || "").trim(),
+        document: documentDigits(result.document || form.document),
+        phone: result.phone || form.phone,
+        sex: form.sex || result.sex,
+        age: Number(form.age || result.age),
+        pregnant: (form.sex || result.sex) === "F" && Boolean(form.pregnant || result.pregnant),
+        gestationWeeks: form.gestationWeeks || result.gestationWeeks,
+        conditionId: form.conditionId || result.conditionId,
+        comorbidityIds: form.comorbidityIds?.length ? form.comorbidityIds : result.comorbidityIds,
+        photo: null,
+        photoBase64: null,
+      };
       const saved = {
         ...result,
-        ...(await registerAndScore(result)),
+        ...(await registerAndScore(payload)),
         contributions: result.contributions,
         immediateActions: result.immediateActions,
         testsToOrder: result.testsToOrder,
@@ -403,8 +423,13 @@ export default function App() {
         geminiReasons: result.geminiReasons,
         datasetReasons: result.datasetReasons,
         iaActive: result.iaActive,
+        photoFindings: result.photoFindings,
+        symptomExplanation: result.symptomExplanation,
       };
       saved.explanation = explainWhy(saved);
+      if (!saved.id) {
+        throw new Error("El servidor no devolvió el paciente. Intente confirmar otra vez.");
+      }
       const nextList = [saved, ...patients.filter((p) => p.id !== saved.id)].sort(comparePriority);
       setPatients(nextList);
       setForm(EMPTY_FORM);
@@ -418,7 +443,6 @@ export default function App() {
       setView("queue");
       setResult(null);
     } catch (error) {
-      confirmLock.current = false;
       setConfirmError(error.message || "No se pudo guardar en la cola.");
       flash(`No se guardó en la cola: ${error.message}`);
     } finally {
@@ -762,7 +786,12 @@ export default function App() {
                 <Field className="full id-field" label="Cédula o TI">
                   <input required inputMode="numeric" maxLength={10} placeholder="Ejemplo: 1078564326" value={form.document} onChange={(e) => setField("document", documentDigits(e.target.value))} />
                   {documentError(form.document) && <small className="vital-live bad">{documentError(form.document)}</small>}
-                  {!documentError(form.document) && <small className="hint">Solo números. Cédula o tarjeta de identidad: de 5 a 10 dígitos.</small>}
+                  {!documentError(form.document) && (
+                    <small className="hint">
+                      {documentAgeHint(form.document, form.age)
+                        || "Solo números. Cédula o TI: de 5 a 10 dígitos. No se rechaza por el prefijo."}
+                    </small>
+                  )}
                 </Field>
                 <Field className="full" label="WhatsApp (celular colombiano)">
                   <input type="tel" inputMode="numeric" maxLength={10} placeholder="3001234567" value={form.phone} onChange={(e) => setField("phone", String(e.target.value || "").replace(/\D/g, "").slice(0, 10))} />
@@ -813,22 +842,22 @@ export default function App() {
                 Usar signos de reposo para esta edad
               </button>
               <div className="g3 vitals-grid">
-                <Field label="Oxígeno %" rangeKey="spo2" age={form.age} ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
+                <Field label="Oxígeno %" rangeKey="spo2" age={form.age} pregnant={form.sex === "F" && form.pregnant} ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
                   <input required type="number" min="0" max="190" step="1" placeholder="el número del oxímetro" value={form.spo2} onChange={(e) => setField("spo2", e.target.value)} />
                 </Field>
-                <Field label="Pulso" rangeKey="heartRate" age={form.age} ask="Frecuencia cardiaca (latidos por minuto)" value={form.heartRate} context={caseContext} estimated={form.estimatedFields.includes("heartRate")}>
+                <Field label="Pulso" rangeKey="heartRate" age={form.age} pregnant={form.sex === "F" && form.pregnant} ask="Frecuencia cardiaca (latidos por minuto)" value={form.heartRate} context={caseContext} estimated={form.estimatedFields.includes("heartRate")}>
                   <input required type="number" min="20" max="250" placeholder="p. ej. 72 o 140" value={form.heartRate} onChange={(e) => setField("heartRate", e.target.value)} />
                 </Field>
-                <Field label="PA arriba" rangeKey="systolic" age={form.age} ask="Presión arterial sistólica (mmHg)" value={form.systolic} context={caseContext} estimated={form.estimatedFields.includes("systolic")}>
+                <Field label="PA arriba" rangeKey="systolic" age={form.age} pregnant={form.sex === "F" && form.pregnant} ask="Presión arterial sistólica (mmHg)" value={form.systolic} context={caseContext} estimated={form.estimatedFields.includes("systolic")}>
                   <input required type="number" min="50" max="250" placeholder="120" value={form.systolic} onChange={(e) => setField("systolic", e.target.value)} />
                 </Field>
-                <Field label="PA abajo" rangeKey="diastolic" age={form.age} ask="Presión arterial diastólica (mmHg)" value={form.diastolic} context={caseContext} estimated={form.estimatedFields.includes("diastolic")}>
+                <Field label="PA abajo" rangeKey="diastolic" age={form.age} pregnant={form.sex === "F" && form.pregnant} ask="Presión arterial diastólica (mmHg)" value={form.diastolic} context={caseContext} estimated={form.estimatedFields.includes("diastolic")}>
                   <input required type="number" min="20" max="160" placeholder="80" value={form.diastolic} onChange={(e) => setField("diastolic", e.target.value)} />
                 </Field>
-                <Field label="Temp. °C" rangeKey="temperature" age={form.age} ask="Temperatura corporal (°C)" value={form.temperature} context={caseContext} estimated={form.estimatedFields.includes("temperature")}>
+                <Field label="Temp. °C" rangeKey="temperature" age={form.age} pregnant={form.sex === "F" && form.pregnant} ask="Temperatura corporal (°C)" value={form.temperature} context={caseContext} estimated={form.estimatedFields.includes("temperature")}>
                   <input required type="number" step="0.1" min="30" max="43" placeholder="36.5" value={form.temperature} onChange={(e) => setField("temperature", e.target.value)} />
                 </Field>
-                <Field label="Respiración" rangeKey="respiratoryRate" age={form.age} ask="Frecuencia respiratoria (respiraciones por minuto)" value={form.respiratoryRate} context={caseContext} estimated={form.estimatedFields.includes("respiratoryRate")}>
+                <Field label="Respiración" rangeKey="respiratoryRate" age={form.age} pregnant={form.sex === "F" && form.pregnant} ask="Frecuencia respiratoria (respiraciones por minuto)" value={form.respiratoryRate} context={caseContext} estimated={form.estimatedFields.includes("respiratoryRate")}>
                   <input required type="number" min="4" max="60" placeholder="12–20" value={form.respiratoryRate} onChange={(e) => setField("respiratoryRate", e.target.value)} />
                 </Field>
               </div>
@@ -953,7 +982,7 @@ export default function App() {
             </div>
             {confirmError && <p className="form-err">{confirmError}</p>}
             <div className="row-btns" style={{ marginTop: 16 }}>
-              <button className="btn" onClick={confirmEntry} disabled={confirmBusy}>
+              <button className="btn" type="button" onClick={confirmEntry} disabled={confirmBusy}>
                 {confirmBusy ? "Guardando en la cola…" : "Confirmar y poner en la cola"}
               </button>
               <button className="ghost" onClick={() => setView("intake")} disabled={confirmBusy}>Corregir datos</button>

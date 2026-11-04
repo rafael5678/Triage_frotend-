@@ -12,7 +12,20 @@ function friendlyApiError(text) {
   if (/temperature is required/i.test(raw)) {
     return "Falta la temperatura.";
   }
+  if (/consciousness|conciencia/i.test(raw) && /match|pattern|regexp/i.test(raw)) {
+    return "La conciencia debe ser A, C, V, P o U. Ya se corrige sola; intente confirmar otra vez.";
+  }
+  if (/validation error/i.test(raw)) {
+    return "Algún dato no pasó la validación. Revise cédula (5 a 10 números), pulso, oxígeno y presión, y confirme de nuevo.";
+  }
   return raw;
+}
+
+function avpuOf(raw) {
+  const s = String(raw || "").trim().toUpperCase();
+  if (!s) return "A";
+  const letter = s.charAt(0);
+  return "ACVPU".includes(letter) ? letter : "A";
 }
 
 const AUTH_URL = import.meta.env.VITE_AUTH_URL || (import.meta.env.DEV ? "http://localhost:8081" : "");
@@ -200,11 +213,13 @@ function vitalsBody(form, patientId, { withPhoto = true } = {}) {
     respiratoryRate: Number(form.respiratoryRate ?? form.fr),
     glucose: optionalNumber(form.glucose),
     painScale: optionalNumber(form.painScale),
-    consciousness: form.consciousness || null,
+    consciousness: avpuOf(form.consciousness),
     estimatedFields: form.estimatedFields || [],
     evaluatedBy: form.evaluatedBy || null,
   };
   const catalogSeverity = optionalNumber(form.conditionSeverity ?? findSymptom(form.conditionId || form.lesionId)?.severity);
+  if (body.glucose != null && (body.glucose < 10 || body.glucose > 1500)) delete body.glucose;
+  if (body.painScale != null && (body.painScale < 0 || body.painScale > 10)) delete body.painScale;
   if (catalogSeverity != null) body.conditionSeverity = catalogSeverity;
   if (form.present === false) body.present = false;
   if (withPhoto && form.photo?.dataUrl) {
@@ -220,10 +235,14 @@ export async function registerAndScore(form) {
     method: "POST",
     body: JSON.stringify(intakeBody(form)),
   });
+  const patientId = created.patientId || created.pacienteId || created.id;
+  if (!patientId) {
+    throw new Error("No se pudo crear la ficha del paciente. Intente confirmar otra vez.");
+  }
   const scored = await request(EVAL_URL, "/api/v1/triage/evaluations", {
     method: "POST",
-    body: JSON.stringify(vitalsBody(form, created.patientId || created.pacienteId || created.id, { withPhoto: false })),
-  }, 45000);
+    body: JSON.stringify(vitalsBody(form, patientId, { withPhoto: false })),
+  }, 90000);
   return mapFromApi(scored);
 }
 
