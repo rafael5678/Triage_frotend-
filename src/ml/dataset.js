@@ -1,4 +1,4 @@
-import { findSymptom } from "../models/catalog";
+import { catalogEsiFloor, findSymptom } from "../models/catalog";
 import { COMORBIDITIES, CONDITIONS } from "./conditions";
 
 export { COMORBIDITIES, CONDITIONS };
@@ -71,7 +71,7 @@ export function clinicalLabel(row) {
   }, 0);
   let y = condition.severity * 0.38 + (n / 20) * 100 * 0.42 + Math.min(25, (shock - 0.5) * 40) + Math.min(12, age / 10) * 0.35 + comorb * 0.55;
   if (Number(row.spo2) < 85 || sbp < 80 || Number(row.respiratoryRate ?? row.fr) < 8) y = Math.max(y, 88);
-  if (condition.severity >= 90) y = Math.max(y, 78);
+  y = Math.max(y, catalogEsiFloor(condition.severity));
   return clamp(Math.round(y * 10) / 10, 0, 100);
 }
 

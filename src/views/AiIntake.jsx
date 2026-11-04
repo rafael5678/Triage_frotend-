@@ -19,7 +19,7 @@ function speechRecognition() {
  * La IA llena solo lo que está vacío; los signos que estima quedan marcados para medirlos.
  */
 export default function AiIntake({ form, onApply, comorbidities, flash }) {
-  const [story, setStory] = useState("");
+  const story = form.story || "";
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [notes, setNotes] = useState(null);
@@ -40,7 +40,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
     rec.continuous = true;
     rec.onresult = (event) => {
       const text = Array.from(event.results).slice(event.resultIndex).map((r) => r[0].transcript).join(" ");
-      setStory((current) => `${current} ${text}`.trim());
+      onApply((current) => ({ story: `${current.story || ""} ${text}`.trim() }));
     };
     rec.onend = () => setListening(false);
     rec.onerror = () => setListening(false);
@@ -126,7 +126,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
         rows="3"
         placeholder="Ej.: Señor de 67 años, dolor fuerte en el pecho que se le va al brazo izquierdo desde hace media hora, sudando, es diabético e hipertenso…"
         value={story}
-        onChange={(e) => setStory(e.target.value)}
+        onChange={(e) => onApply({ story: e.target.value })}
       />
       <div className="ai-intake-actions">
         {canDictate && (

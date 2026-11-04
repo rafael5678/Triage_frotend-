@@ -29,6 +29,21 @@ function windowOf(shiftId, dateIso) {
   return { start, end: start + shift.hours * 3600000, shift };
 }
 
+function dayWindow(dateIso) {
+  const [y, m, d] = dateIso.split("-").map(Number);
+  const start = new Date(y, m - 1, d, 0, 0, 0).getTime();
+  return { start, end: start + 24 * 3600000 };
+}
+
+function arrivedMs(p) {
+  const n = Number(p.arrivedAt || p.evaluatedAt);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function stillInHospital(p) {
+  return p.status === "En espera" || p.status === "En atención" || p.statusCode === "EN_ESPERA" || p.statusCode === "EN_ATENCION";
+}
+
 function hhmm(ms) {
   return ms ? new Date(ms).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" }) : "";
 }
@@ -53,9 +68,22 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
   const { start, end, shift } = windowOf(shiftId, date);
 
   const report = useMemo(() => {
+    const day = dayWindow(date);
     const rows = patients
-      .filter((p) => p.arrivedAt >= start && p.arrivedAt < end)
-      .sort((a, b) => a.arrivedAt - b.arrivedAt);
+      .filter((p) => {
+        const at = arrivedMs(p);
+        return at >= start && at < end;
+      })
+      .sort((a, b) => arrivedMs(a) - arrivedMs(b));
+    const todayRows = patients
+      .filter((p) => {
+        const at = arrivedMs(p);
+        return at >= day.start && at < day.end;
+      })
+      .sort((a, b) => arrivedMs(a) - arrivedMs(b));
+    const carryover = patients
+      .filter((p) => stillInHospital(p) && arrivedMs(p) && arrivedMs(p) < start)
+      .sort((a, b) => arrivedMs(a) - arrivedMs(b));
     const now = Date.now();
     const cared = rows.filter((p) => p.careStartedAt);
     const toCare = cared.map((p) => Math.max(0, Math.round((p.careStartedAt - p.arrivedAt) / 60000)));
@@ -68,6 +96,8 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
     const p90 = sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9))] : null;
     return {
       rows,
+      todayRows,
+      carryover,
       cared,
       avg,
       p90,
@@ -128,14 +158,25 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
         </label>
         <label>Fecha de inicio<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
       </div>
+      <p className="sub no-print">
+        Este turno ({shift.label}): <b>{report.rows.length}</b> ingreso{report.rows.length === 1 ? "" : "s"}.
+        {" "}Hoy {date}: <b>{report.todayRows.length}</b> en total.
+        {shiftId !== "dia" && report.todayRows.length > report.rows.length
+          ? " Los que llegaron en otra franja aparecen al elegir Mañana, Noche o Día completo."
+          : ""}
+        {report.carryover.length > 0
+          ? ` Quedaron ${report.carryover.length} del turno anterior (siguen en espera o en atención).`
+          : ""}
+      </p>
 
       <header className="print-only">
         <h1>Urgencias · reporte del turno</h1>
         <p>{shift.label} · {new Date(start).toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · generado por {user?.displayName} a las {hhmm(Date.now())}</p>
       </header>
 
-      <div className="stats six">
-        <article><small>Ingresos</small><b>{report.rows.length}</b></article>
+      <div className="stats">
+        <article><small>Ingresos de este turno</small><b>{report.rows.length}</b></article>
+        <article><small>Ingresos del día</small><b>{report.todayRows.length}</b></article>
         <article><small>Atendidos</small><b>{report.cared.length}</b></article>
         <article><small>Minutos hasta atención (promedio)</small><b>{report.avg ?? "—"}</b></article>
         <article><small>El 90% se atendió en</small><b>{report.p90 == null ? "—" : `${report.p90} min`}</b></article>
@@ -206,6 +247,20 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
           </table>
         )}
       </div>
+
+      {report.carryover.length > 0 && (
+        <div className="sheet table-wrap" style={{ marginTop: 16 }}>
+          <h3>Ya estaban (llegaron antes de este turno)</h3>
+          <p className="muted">Siguen en espera o en atención; no son ingresos nuevos de esta franja.</p>
+          <ul className="bullets">
+            {report.carryover.map((p) => (
+              <li key={p.id}>
+                <b>{p.name}</b> · llegó {hhmm(arrivedMs(p))} · {p.status} · {LEVELS[p.triageLevel]?.chip || p.priority?.chip}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }

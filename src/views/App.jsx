@@ -57,6 +57,7 @@ const EMPTY_FORM = {
   pregnant: false,
   gestationWeeks: "",
   present: true,
+  story: "",
 };
 
 /** Insignias de tiempo y presencia que se ven en la cola. */
@@ -139,6 +140,7 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [analyzeBusy, setAnalyzeBusy] = useState(false);
   const [confirmBusy, setConfirmBusy] = useState(false);
+  const [careBusy, setCareBusy] = useState(false);
   const [confirmError, setConfirmError] = useState("");
   const [catalog, setCatalog] = useState([]);
   const [view, setView] = useState("queue");
@@ -246,7 +248,10 @@ export default function App() {
   }
 
   function applyForm(patch) {
-    setForm((current) => ({ ...current, ...patch }));
+    setForm((current) => {
+      const next = typeof patch === "function" ? patch(current) : patch;
+      return { ...current, ...next };
+    });
   }
 
   const caseContext = `${form.age ? `${form.age} años` : ""} ${form.sex || ""} ${conditionLabel(form.conditionId)} ${form.reason || ""}`.trim();
@@ -389,16 +394,31 @@ export default function App() {
   }
 
   async function moveToCare(id) {
+    if (!id || careBusy) return;
+    setCareBusy(true);
+    const previous = patients.find((p) => p.id === id);
+    replacePatient({
+      ...(previous || selected || {}),
+      id,
+      status: "En atención",
+      statusCode: "EN_ATENCION",
+      careStartedAt: Date.now(),
+    });
+    setSelected(null);
     try {
       const updated = await startCare(id);
       replacePatient(updated);
       const minutes = updated.careStartedAt ? Math.round((updated.careStartedAt - updated.arrivedAt) / 60000) : null;
       flash(`Pasa a atención${minutes != null ? ` después de ${minutesLabel(minutes)} de espera` : ""}.`);
     } catch (error) {
-      flash(error.message);
-      return;
+      if (previous) replacePatient(previous);
+      else {
+        try { setPatients(await fetchPatients()); } catch { /* keep optimistic row */ }
+      }
+      flash(error.message || "No se pudo pasar a atención. Intente de nuevo.");
+    } finally {
+      setCareBusy(false);
     }
-    setSelected(null);
   }
 
   async function closeCare(id, status) {
@@ -611,7 +631,6 @@ export default function App() {
                     <div className="sc">
                       <small>Espera {p.maxWaitMinutes ?? estimateWaitMinutes(p.score, waiting)} min</small>
                     </div>
-                    <span className="wait">~{p.maxWaitMinutes ?? estimateWaitMinutes(p.score, waiting)} min</span>
                   </li>
                 ))}
               </ol>
@@ -660,7 +679,9 @@ export default function App() {
                       </div>
                     )}
                     <div className="row-btns">
-                      <button className="btn" onClick={() => moveToCare(selected.id)}>Pasar a atención</button>
+                      <button className="btn" onClick={() => moveToCare(selected.id)} disabled={careBusy}>
+                        {careBusy ? "Pasando a atención…" : "Pasar a atención"}
+                      </button>
                       <button className="ghost" onClick={() => { setRecheck({ ...selected, estimatedFields: [] }); setView("recheck"); }}>Volver a medir signos</button>
                     </div>
                     <h4 className="mini-title">Evolución</h4>
@@ -739,10 +760,10 @@ export default function App() {
               </button>
               <div className="g3 vitals-grid">
                 <Field label="Oxígeno %" rangeKey="spo2" age={form.age} ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
-                  <input required type="number" min="50" max="100" placeholder="95–100" value={form.spo2} onChange={(e) => setField("spo2", e.target.value)} />
+                  <input required type="number" min="0" max="100" placeholder="p. ej. 97" value={form.spo2} onChange={(e) => setField("spo2", e.target.value)} />
                 </Field>
                 <Field label="Pulso" rangeKey="heartRate" age={form.age} ask="Frecuencia cardiaca (latidos por minuto)" value={form.heartRate} context={caseContext} estimated={form.estimatedFields.includes("heartRate")}>
-                  <input required type="number" min="20" max="220" placeholder="60–100" value={form.heartRate} onChange={(e) => setField("heartRate", e.target.value)} />
+                  <input required type="number" min="20" max="250" placeholder="p. ej. 72 o 140" value={form.heartRate} onChange={(e) => setField("heartRate", e.target.value)} />
                 </Field>
                 <Field label="PA arriba" rangeKey="systolic" age={form.age} ask="Presión arterial sistólica (mmHg)" value={form.systolic} context={caseContext} estimated={form.estimatedFields.includes("systolic")}>
                   <input required type="number" min="50" max="250" placeholder="120" value={form.systolic} onChange={(e) => setField("systolic", e.target.value)} />
@@ -751,10 +772,10 @@ export default function App() {
                   <input required type="number" min="20" max="160" placeholder="80" value={form.diastolic} onChange={(e) => setField("diastolic", e.target.value)} />
                 </Field>
                 <Field label="Temp. °C" rangeKey="temperature" age={form.age} ask="Temperatura corporal (°C)" value={form.temperature} context={caseContext} estimated={form.estimatedFields.includes("temperature")}>
-                  <input required type="number" step="0.1" min="32" max="43" placeholder="36.5" value={form.temperature} onChange={(e) => setField("temperature", e.target.value)} />
+                  <input required type="number" step="0.1" min="30" max="43" placeholder="36.5" value={form.temperature} onChange={(e) => setField("temperature", e.target.value)} />
                 </Field>
                 <Field label="Respiración" rangeKey="respiratoryRate" age={form.age} ask="Frecuencia respiratoria (respiraciones por minuto)" value={form.respiratoryRate} context={caseContext} estimated={form.estimatedFields.includes("respiratoryRate")}>
-                  <input required type="number" min="4" max="50" placeholder="12–20" value={form.respiratoryRate} onChange={(e) => setField("respiratoryRate", e.target.value)} />
+                  <input required type="number" min="4" max="60" placeholder="12–20" value={form.respiratoryRate} onChange={(e) => setField("respiratoryRate", e.target.value)} />
                 </Field>
               </div>
 

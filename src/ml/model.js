@@ -1,5 +1,6 @@
 import { FEATURES, generateDataset, toFeatures, news2Score } from "./dataset";
 import { CONDITIONS } from "./conditions";
+import { catalogEsiFloor, findSymptom } from "../models/catalog";
 
 function fitStump(rows, residual) {
   let best = { feat: FEATURES[0], thr: 0, left: 0, right: 0, err: Infinity };
@@ -71,6 +72,9 @@ export function predictScore(model, row) {
   if (Number.isFinite(sbp) && Number.isFinite(dbp) && sbp < dbp) p = Math.max(p, 62);
   if (sbp > 0 && sbp < 90) p = Math.max(p, 42);
   if ((row.conditionId || row.lesionId) === "paro") p = Math.max(p, 97);
+  const cond = findSymptom(row.conditionId || row.lesionId)
+    || CONDITIONS.find((c) => c.id === (row.conditionId || row.lesionId));
+  p = Math.max(p, catalogEsiFloor(cond?.severity ?? row.conditionSeverity));
   return Math.min(100, Math.max(0, Math.round(p * 10) / 10));
 }
 

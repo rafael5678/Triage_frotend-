@@ -1,4 +1,5 @@
 import { priorityFromScore } from "../ml/model";
+import { findSymptom } from "../models/catalog";
 
 function friendlyApiError(text) {
   const raw = String(text || "");
@@ -151,7 +152,7 @@ function intakeBody(form) {
     age: Number(form.age ?? form.edad),
     sex: form.sex || form.sexo,
     conditionId: form.conditionId || form.lesionId,
-    reason: form.reason || form.motivo,
+    reason: form.reason || form.motivo || form.story || "",
     history,
     phone: form.phone && String(form.phone).trim() ? String(form.phone).trim() : null,
     pregnant: (form.sex || form.sexo) === "F" && Boolean(form.pregnant),
@@ -179,6 +180,8 @@ function vitalsBody(form, patientId, { withPhoto = true } = {}) {
     estimatedFields: form.estimatedFields || [],
     evaluatedBy: form.evaluatedBy || null,
   };
+  const catalogSeverity = optionalNumber(form.conditionSeverity ?? findSymptom(form.conditionId || form.lesionId)?.severity);
+  if (catalogSeverity != null) body.conditionSeverity = catalogSeverity;
   if (form.present === false) body.present = false;
   if (withPhoto && form.photo?.dataUrl) {
     body.photoBase64 = form.photo.dataUrl;
@@ -221,7 +224,12 @@ export async function reevaluatePatient(id, form) {
 }
 
 export async function startCare(id) {
-  return mapFromApi(await request(QUEUE_URL, `/api/v1/triage/care/${id}`, { method: "PATCH" }));
+  const path = `/api/v1/triage/care/${id}`;
+  try {
+    return mapFromApi(await request(QUEUE_URL, path, { method: "PATCH" }, 90000));
+  } catch (error) {
+    return mapFromApi(await request(QUEUE_URL, path, { method: "POST" }, 90000));
+  }
 }
 
 export async function finishCare(id, status = "ATENDIDO") {

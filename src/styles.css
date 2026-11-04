@@ -202,11 +202,11 @@ h1, h2, .brand strong, .bar-title {
 }
 .stats b { display: block; font-size: 28px; font-family: Fraunces, serif; }
 .stats .crit b { color: var(--i); }
-.split { display: grid; grid-template-columns: 1.35fr .75fr; gap: 16px; }
-.queue { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.split { display: grid; grid-template-columns: 1.35fr .75fr; gap: 16px; align-items: start; }
+.queue { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; align-content: start; }
 .q {
-  display: grid; grid-template-columns: 48px 1.4fr auto auto 70px;
-  gap: 10px; align-items: center;
+  display: grid; grid-template-columns: 48px minmax(0, 1.4fr) auto auto minmax(64px, auto);
+  gap: 10px; align-items: center; align-self: start;
   background: var(--card); border: 1px solid var(--line);
   border-radius: 18px; padding: 12px 14px; cursor: pointer;
   border-left: 5px solid var(--iv);
