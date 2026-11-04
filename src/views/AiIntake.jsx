@@ -119,7 +119,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
   return (
     <div className="ai-intake">
       <div className="ai-intake-head">
-        <h3>Qué está pasando</h3>
+        <h3><span className="step-num">1</span> ¿Qué está pasando?</h3>
         <p className="sub">Díctelo o escríbalo. Gemini completa edad, motivo y signos. Si hay herida, agregue foto.</p>
       </div>
       <textarea

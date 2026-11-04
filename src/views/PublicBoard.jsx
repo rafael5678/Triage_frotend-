@@ -84,9 +84,9 @@ export default function PublicBoard() {
     <div className="board">
       <header className="board-head">
         <div>
-          <p className="eyebrow">Urgencias · sala de espera</p>
-          <h1>Se atiende primero al más grave</h1>
-          <p className="lede">Su turno son las iniciales y los últimos 3 del documento (ejemplo JC-478). El más grave pasa primero; si empatan, una persona de 65 años o más va delante. El orden puede cambiar.</p>
+          <p className="eyebrow">TriageIA · Urgencias · Sala de espera</p>
+          <h1>Atendemos primero a quien está más grave</h1>
+          <p className="lede">Su turno son las iniciales y los últimos 3 del documento (ejemplo JC-478). El más grave pasa primero; si empatan, una persona de 65 años o más va delante.</p>
         </div>
         <div className="board-clock">
           <b>{now.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}</b>
@@ -128,7 +128,7 @@ export default function PublicBoard() {
                     {r.present === false && <small className="board-note">No está en sala · acérquese a triaje</small>}
                     {r.present !== false && r.overdue && <small className="board-note">Si se siente peor, avise en triaje</small>}
                   </strong>
-                  <span className={`chip ${level.tone}`}>{level.chip}</span>
+                  <span className={`chip ${level.tone}`}><i />{level.chip}</span>
                   <span className="board-area">
                     {r.destinationArea || "Por asignar"}
                     {r.destinationCode && <small>{r.destinationCode}</small>}
@@ -157,11 +157,11 @@ export default function PublicBoard() {
             ))}
           </ul>
           <div className="board-legend">
-            <p><span className="chip i">Crítica</span> ya</p>
-            <p><span className="chip ii">Alta</span> 10 min</p>
-            <p><span className="chip iii">Media</span> 30 min</p>
-            <p><span className="chip iv">Baja</span> 60 min</p>
-            <p><span className="chip v">Mínima</span> 120 min</p>
+            <p><span className="chip i"><i />Crítica</span> 2 min</p>
+            <p><span className="chip ii"><i />Alta</span> 10 min</p>
+            <p><span className="chip iii"><i />Media</span> 30 min</p>
+            <p><span className="chip iv"><i />Baja</span> 60 min</p>
+            <p><span className="chip v"><i />Mínima</span> 120 min</p>
           </div>
         </aside>
       </section>

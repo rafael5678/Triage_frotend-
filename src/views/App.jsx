@@ -7,13 +7,14 @@ import {
   analyzeTriage, fetchPatients, fetchQueueHealth, fetchSymptoms, finishCare, login as loginRequest, markNotified,
   registerAndScore, reevaluatePatient, setPresence, startCare, subscribeEvents,
 } from "../services/api";
-import { CARE_TARGETS, estimateWaitMinutes, waitSummary } from "../models/waitTimes";
+import { estimateWaitMinutes, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
 import { AVPU } from "../models/levels";
 import { isValidWhatsApp, minutesLabel, noticeDue, phoneError, waitInfo, whatsappLink } from "../models/notice";
 import { crashWarning, fillRestingIfEmpty, invertedPressure, vitalHint } from "../models/vitals";
 import AdminPortal from "./AdminPortal";
 import AiIntake from "./AiIntake";
+import LoginScene from "./LoginScene";
 import FieldHelp from "./FieldHelp";
 import Recommendations, { DestinationCard, EstimatedWarning, VitalGuide } from "./Recommendations";
 import ShiftReport from "./ShiftReport";
@@ -82,7 +83,7 @@ function Logo() {
       </span>
       <div>
         <strong>TriageIA</strong>
-        <small>Cola por gravedad real</small>
+        <small>Triaje inteligente · Urgencias</small>
       </div>
     </div>
   );
@@ -100,7 +101,7 @@ function matchesSearch(patient, raw) {
 }
 
 function Chip({ priority }) {
-  return <span className={`chip ${priority.tone}`}>{priority.chip}</span>;
+  return <span className={`chip ${priority.tone}`}><i />{priority.chip}</span>;
 }
 
 /** ask: nombre del dato para que la IA lo explique; estimated: el valor lo puso la IA y falta medirlo. */
@@ -134,6 +135,8 @@ export default function App() {
   const [login, setLogin] = useState({ username: "", password: "" });
   const [loginError, setLoginError] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [analyzeBusy, setAnalyzeBusy] = useState(false);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState("");
@@ -281,6 +284,7 @@ export default function App() {
     setForm(EMPTY_FORM);
     setView("queue");
     setLiveQueue({ loading: true, patients: [] });
+    setMenuOpen(false);
   }
 
   async function analyze(event) {
@@ -452,7 +456,6 @@ export default function App() {
 
   const filtered = patients.filter((p) => matchesSearch(p, query));
 
-  const topWaiting = liveQueue.patients[0];
   const selectedExplain = selected ? explainWhy(selected) : null;
   const conditions = catalog.length ? catalog : symptomCatalog();
 
@@ -461,55 +464,24 @@ export default function App() {
       <div className="auth">
         <section className="auth-copy">
           <Logo />
-          <p className="eyebrow">Urgencias · cola por riesgo, no por orden de llegada</p>
-          <h1>Entra quien está más grave, no quien llegó primero.</h1>
-          <p className="lede">
-            El puntaje va de 0 a 100. Se calcula con oxígeno, pulso, presión, temperatura, respiración, edad, qué le duele y enfermedades que ya tenía.
-          </p>
+          <p className="staff-pill">Acceso exclusivo del personal</p>
+          <h1>Entra quien está <em>más grave</em>, no quien llegó primero.</h1>
+          <p className="lede">Ingresa con la cuenta asignada por el administrador. El sistema abre enfermería o administración según esas credenciales.</p>
           <form className="auth-form" onSubmit={onLogin}>
             <label>Usuario<input autoComplete="username" value={login.username} onChange={(e) => setLogin({ ...login, username: e.target.value })} /></label>
-            <label>Contraseña<input type="password" autoComplete="current-password" value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} /></label>
+            <label>Contraseña
+              <span className="pass-wrap">
+                <input type={showPassword ? "text" : "password"} autoComplete="current-password" value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} />
+                <button type="button" className="text show-pass" onClick={() => setShowPassword((v) => !v)}>{showPassword ? "Ocultar" : "Mostrar"}</button>
+              </span>
+            </label>
             {loginError && <p className="form-err">{loginError}</p>}
-            <button className="btn" type="submit" disabled={loginBusy}>{loginBusy ? "Comprobando…" : "Entrar"}</button>
+            <button className="btn wide" type="submit" disabled={loginBusy}>{loginBusy ? "Comprobando…" : "Entrar →"}</button>
           </form>
-          <p className="board-link"><a href="#/sala">Abrir la pantalla de la sala de espera (para el televisor)</a></p>
+          <a className="tv-link" href="#/sala"><span>Pantalla de sala de espera (TV)</span><em>Abrir →</em></a>
+          <p className="auth-foot">Solo personal autorizado · Uso clínico responsable</p>
         </section>
-        <aside className="auth-visual">
-          <div className="glass glass-wide">
-            <span>Cuánto se espera, según qué tan grave esté</span>
-            <p className="glass-lead">
-              El puntaje va de 0 a 100: <b>más alto = más grave</b>. 78 Crítica, 62 Alta, 42 Media, 22 Baja, 8 Mínima.
-              La barra es la espera en minutos (un caso leve puede esperar más).
-            </p>
-            <ul className="wait-bands">
-              {CARE_TARGETS.map((t) => {
-                const count = liveQueue.patients.filter((p) => p.score >= t.minScore && p.score <= t.maxScore).length;
-                const share = Math.round((t.wait / 120) * 100);
-                return (
-                  <li key={t.id}>
-                    <div className="wait-row">
-                      <b>{t.label}</b>
-                      <em>puntaje {t.minScore}–{t.maxScore}</em>
-                      <span>~{t.wait} min</span>
-                    </div>
-                    <div className="wait-bar"><i style={{ width: `${share}%` }} /></div>
-                    <small>{t.detail}{!liveQueue.loading && !liveQueue.offline ? ` · Ahora en sala: ${count}` : ""}</small>
-                  </li>
-                );
-              })}
-            </ul>
-            {topWaiting && (
-              <p className="glass-now">
-                Más grave ahora: puntaje {topWaiting.score.toFixed(1)} · espera meta ~{estimateWaitMinutes(topWaiting.score, liveQueue.patients)} min.
-              </p>
-            )}
-            {liveQueue.loading && <small className="glass-status">Consultando la sala… si el servidor está dormido puede tardar hasta un minuto.</small>}
-            {liveQueue.offline && <small className="glass-status">Servidor aún no responde. Puedes entrar igual; la tabla de espera es del protocolo de triage.</small>}
-            {!liveQueue.loading && !liveQueue.offline && !topWaiting && (
-              <small className="glass-status">Sala vacía en la base. Los tiempos de arriba son la meta según gravedad.</small>
-            )}
-          </div>
-        </aside>
+        <LoginScene />
       </div>
     );
   }
@@ -520,36 +492,55 @@ export default function App() {
 
   return (
     <div className="app">
-      <aside className="side">
+      <aside className={`side ${menuOpen ? "open" : ""}`}>
         <Logo />
         <nav>
-          {NAV.map(([id, label]) => (
+          <p className="nav-label">Operación</p>
+          {NAV.slice(0, 3).map(([id, label]) => (
             <button key={id} className={view === id || (id === "intake" && view === "result") ? "on" : ""} onClick={() => {
               setView(id);
+              setMenuOpen(false);
               if (id !== "history" && id !== "patients") {
                 setQuery("");
                 setHistoryFor(null);
               }
             }}>
               {label}
+              {id === "queue" && waiting.length > 0 && <span className="nav-count">{waiting.length}</span>}
             </button>
+          ))}
+          <p className="nav-label">Análisis</p>
+          {NAV.slice(3, 6).map(([id, label]) => (
+            <button key={id} className={view === id ? "on" : ""} onClick={() => {
+              setView(id);
+              setMenuOpen(false);
+              if (id !== "history" && id !== "patients") {
+                setQuery("");
+                setHistoryFor(null);
+              }
+            }}>{label}</button>
+          ))}
+          <p className="nav-label">Guía</p>
+          {NAV.slice(6).map(([id, label]) => (
+            <button key={id} className={view === id ? "on" : ""} onClick={() => { setView(id); setMenuOpen(false); }}>{label}</button>
           ))}
         </nav>
         <div className="me">
-          <span className="ava">UR</span>
+          <span className="ava">{String(user.displayName || "UR").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase()}</span>
           <div>
             <b>{user.displayName}</b>
-            <small>Personal de urgencias</small>
+            <small>Enfermería · turno</small>
           </div>
         </div>
       </aside>
 
       <div className="stage">
         <header className="bar">
+          <button type="button" className="menu-btn" onClick={() => setMenuOpen((v) => !v)}>Menú</button>
           <p className="bar-title">{NAV.find(([id]) => id === view || (id === "intake" && view === "result"))?.[1] || "TriageIA"}</p>
           <div className="bar-meta">
             <span className={`live ${live ? "on" : "off"}`} title={live ? "La cola se actualiza sola cuando algo cambia" : "Sin conexión en vivo: se actualiza cada minuto"}>
-              {waiting.length} en espera · {live ? "en vivo" : "cada minuto"}
+              {live ? "En vivo" : "cada minuto"}
             </span>
             <button className="text" onClick={logout}>Salir</button>
           </div>
@@ -561,7 +552,7 @@ export default function App() {
             <div className="hero-line">
               <div>
                 <h1>Sala de espera</h1>
-                <p>El 1 es el más grave. Si el nivel es el mismo, pasa quien tiene 65 años o más. El turno (JC-478) es el de la pantalla de sala.</p>
+                <p className="sub">Cola ordenada por gravedad · se actualiza en tiempo real</p>
               </div>
               <button className="btn" onClick={() => setView("intake")}>Nuevo ingreso</button>
             </div>
@@ -604,10 +595,10 @@ export default function App() {
                       </small>
                       <WaitBadges patient={p} now={now} />
                     </div>
+                    <span className={`score-tile ${p.priority.tone}`}>{Math.round(p.score)}</span>
                     <Chip priority={p.priority} />
                     <div className="sc">
-                      <b>{Number(p.score).toFixed(1)}</b>
-                      <small>meta {p.maxWaitMinutes ?? estimateWaitMinutes(p.score, waiting)} min</small>
+                      <small>Espera {p.maxWaitMinutes ?? estimateWaitMinutes(p.score, waiting)} min</small>
                     </div>
                     <span className="wait">~{p.maxWaitMinutes ?? estimateWaitMinutes(p.score, waiting)} min</span>
                   </li>
@@ -677,7 +668,7 @@ export default function App() {
             <form className="sheet intake-sheet" onSubmit={analyze}>
               <AiIntake form={form} onApply={applyForm} comorbidities={COMORBIDITIES} flash={flash} />
 
-              <h3>Paciente</h3>
+              <h3><span className="step-num">2</span> Paciente</h3>
               <div className="g2">
                 <Field label="Nombre">
                   <input required placeholder="Nombre y apellido" value={form.name} onChange={(e) => setField("name", e.target.value)} />
@@ -726,7 +717,7 @@ export default function App() {
                 </Field>
               </div>
 
-              <h3>Signos (se miden, no se adivinan)</h3>
+              <h3><span className="step-num">3</span> Signos (se miden, no se adivinan)</h3>
               <p className="sub">
                 Oxígeno: clip en el dedo. Pulso: el mismo clip o la muñeca. Presión: tensiómetro (el de arriba / el de abajo).
                 Temperatura: frente o axila. Respiración: cuente el pecho 1 minuto.

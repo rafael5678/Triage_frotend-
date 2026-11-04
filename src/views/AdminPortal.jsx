@@ -107,8 +107,10 @@ export default function AdminPortal({ user, onLogout }) {
       <aside className="side">
         <Logo />
         <nav>
+          <p className="nav-label">Configuración</p>
           <button className={tab === "symptoms" ? "on" : ""} onClick={() => setTab("symptoms")}>Síntomas / celdas</button>
           <button className={tab === "users" ? "on" : ""} onClick={() => setTab("users")}>Cuentas de acceso</button>
+          <p className="nav-label">Monitoreo</p>
           <button className={tab === "patients" ? "on" : ""} onClick={() => setTab("patients")}>Pacientes en sala</button>
           <button className={tab === "stats" ? "on" : ""} onClick={() => setTab("stats")}>Estadísticas</button>
           <a className="side-link" href="#/sala" target="_blank" rel="noreferrer">Pantalla de sala</a>
@@ -134,6 +136,7 @@ export default function AdminPortal({ user, onLogout }) {
           <section className="page">
             <h1>Síntomas del formulario</h1>
             <p className="sub">Cada fila es una opción del menú “¿Qué le pasa?”. La gravedad (0–100) ayuda a ordenar la cola.</p>
+            <div className="split">
             <form className="sheet" onSubmit={onSaveSymptom}>
               <div className="g2">
                 <label>Texto que verá el personal
@@ -176,6 +179,7 @@ export default function AdminPortal({ user, onLogout }) {
                   ))}
                 </tbody>
               </table>
+            </div>
             </div>
           </section>
         )}
