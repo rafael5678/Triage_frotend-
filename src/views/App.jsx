@@ -139,6 +139,7 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [analyzeBusy, setAnalyzeBusy] = useState(false);
+  const [intakeError, setIntakeError] = useState("");
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [careBusy, setCareBusy] = useState(false);
   const [confirmError, setConfirmError] = useState("");
@@ -313,18 +314,38 @@ export default function App() {
 
   async function analyze(event) {
     event.preventDefault();
-    if (!form.conditionId) return;
+    setIntakeError("");
+    if (!form.name?.trim()) {
+      const msg = "Falta el nombre.";
+      setIntakeError(msg); flash(msg); return;
+    }
+    if (!form.conditionId) {
+      const msg = "Elija qué le pasa, o pulse Llenar con IA.";
+      setIntakeError(msg); flash(msg); return;
+    }
     const docMsg = documentError(form.document);
     if (docMsg || documentDigits(form.document).length < 5) {
-      flash(docMsg || "La cédula o TI debe tener entre 5 y 10 números.");
-      return;
+      const msg = docMsg || "La cédula o TI debe tener entre 5 y 10 números.";
+      setIntakeError(msg); flash(msg); return;
     }
-    if (Number(form.spo2) > 100) {
-      flash("El oxígeno (SpO2) no puede ser mayor de 100%. Ponga el número del oxímetro, de 0 a 100.");
-      return;
+    const spo2 = Number(form.spo2);
+    if (!Number.isFinite(spo2)) {
+      const msg = "Falta el oxígeno.";
+      setIntakeError(msg); flash(msg); return;
     }
-    const warn = [invertedPressure(form), crashWarning(form)].filter(Boolean).join(" ");
-    if (warn && !window.confirm(`${warn}\n\n¿Calcular con estos números?`)) return;
+    if (spo2 > 100) {
+      const msg = "El oxígeno (SpO2) no puede ser mayor de 100%. El 100 sí es válido.";
+      setIntakeError(msg); flash(msg); return;
+    }
+    const needed = [
+      ["age", "edad"], ["heartRate", "pulso"], ["systolic", "presión de arriba"],
+      ["diastolic", "presión de abajo"], ["temperature", "temperatura"], ["respiratoryRate", "respiración"],
+    ];
+    const missing = needed.find(([key]) => form[key] === "" || form[key] == null || !Number.isFinite(Number(form[key])));
+    if (missing) {
+      const msg = `Falta ${missing[1]}.`;
+      setIntakeError(msg); flash(msg); return;
+    }
     setAnalyzeBusy(true);
     const local = createPatient(toPayload(form), pack.model);
     local.contributions = featureContributions(pack.model, local);
@@ -725,7 +746,7 @@ export default function App() {
           <section className="page">
             <h1>Nuevo ingreso</h1>
             <p className="sub">1. Cuente qué pasa. 2. Pulse Llenar con IA. 3. Revise los números y calcule. El ? explica cualquier casilla.</p>
-            <form className="sheet intake-sheet" onSubmit={analyze}>
+            <form className="sheet intake-sheet" onSubmit={analyze} noValidate>
               <AiIntake form={form} onApply={applyForm} comorbidities={COMORBIDITIES} flash={flash} />
 
               <h3><span className="step-num">2</span> Paciente</h3>
@@ -816,11 +837,11 @@ export default function App() {
                       <option value="no">Aún no llega</option>
                     </select>
                   </Field>
-                  <Field label="Glucosa" ask="Glucosa en sangre (glucometría, mg/dL)" value={form.glucose} context={caseContext}>
-                    <input type="number" min="10" max="1500" value={form.glucose} onChange={(e) => setField("glucose", e.target.value)} />
+                  <Field label="Glucosa (opcional)" ask="Glucosa en sangre (glucometría, mg/dL)" value={form.glucose} context={caseContext}>
+                    <input type="number" inputMode="numeric" placeholder="si no la midió, déjelo vacío" value={form.glucose} onChange={(e) => setField("glucose", e.target.value)} />
                   </Field>
-                  <Field label="Dolor 0–10" ask="Escala de dolor de 0 a 10" value={form.painScale} context={caseContext}>
-                    <input type="number" min="0" max="10" value={form.painScale} onChange={(e) => setField("painScale", e.target.value)} />
+                  <Field label="Dolor 0–10 (opcional)" ask="Escala de dolor de 0 a 10" value={form.painScale} context={caseContext}>
+                    <input type="number" inputMode="numeric" placeholder="si no preguntó, déjelo vacío" value={form.painScale} onChange={(e) => setField("painScale", e.target.value)} />
                   </Field>
                   <Field label="Conciencia" ask="Estado de conciencia (escala AVPU)" value={form.consciousness} context={caseContext}>
                     <select value={form.consciousness} onChange={(e) => setField("consciousness", e.target.value)}>
@@ -851,6 +872,7 @@ export default function App() {
                   ))}
                 </div>
               </details>
+              {intakeError && <p className="form-err">{intakeError}</p>}
               <button className="btn wide" type="submit" disabled={analyzeBusy}>{analyzeBusy ? "Calculando con el protocolo y Gemini…" : "Calcular puntaje"}</button>
             </form>
           </section>

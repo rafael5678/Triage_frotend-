@@ -116,7 +116,7 @@ export function vitalHint(key, raw, age) {
   const value = Number(raw);
   if (!Number.isFinite(value)) return null;
   if (key === "spo2" && value > 100) {
-    return { badge: "revise el número", ok: false, text: "El oxígeno (SpO2) no pasa de 100%. Si el aparato marcó más, ponga 100 y mida de nuevo." };
+    return { badge: "revise el número", ok: false, text: "Más de 100% no es saturación. El 100 sí vale; si marcó más, ponga 100." };
   }
   const badge = item.bad(value);
   const ok = badge === "bien" || badge === "aceptable";
