@@ -1,6 +1,7 @@
 import { FEATURES, generateDataset, toFeatures, news2Score } from "./dataset";
 import { CONDITIONS } from "./conditions";
 import { catalogEsiFloor, findSymptom } from "../models/catalog";
+import { TRIAGE_BANDS } from "../models/triageBands";
 
 function fitStump(rows, residual) {
   let best = { feat: FEATURES[0], thr: 0, left: 0, right: 0, err: Infinity };
@@ -63,35 +64,35 @@ export function predictScore(model, row) {
   const rr = Number(row.respiratoryRate ?? row.fr);
   const hr = Number(row.heartRate ?? row.fc);
   const dbp = Number(row.diastolic ?? row.pad);
-  if (spo2 <= 85) p = Math.max(p, 86);
-  else if (spo2 <= 89) p = Math.max(p, 78);
-  else if (spo2 <= 91) p = Math.max(p, 62);
-  else if (spo2 < 95) p = Math.max(p, 22);
-  if (hr > 0 && hr < 40) p = Math.max(p, 86);
-  else if (hr > 0 && hr < 45) p = Math.max(p, 78);
-  else if (hr > 0 && hr < 50) p = Math.max(p, 62);
+  if (spo2 <= 85) p = Math.max(p, TRIAGE_BANDS.RESUSCITATION);
+  else if (spo2 <= 89) p = Math.max(p, TRIAGE_BANDS.ESI_I);
+  else if (spo2 <= 91) p = Math.max(p, TRIAGE_BANDS.ESI_II);
+  else if (spo2 < 95) p = Math.max(p, TRIAGE_BANDS.ESI_IV);
+  if (hr > 0 && hr < 40) p = Math.max(p, TRIAGE_BANDS.RESUSCITATION);
+  else if (hr > 0 && hr < 45) p = Math.max(p, TRIAGE_BANDS.ESI_I);
+  else if (hr > 0 && hr < 50) p = Math.max(p, TRIAGE_BANDS.ESI_II);
   const temp = Number(row.temperature ?? row.temp);
   if (Number.isFinite(temp)) {
-    if (temp <= 34) p = Math.max(p, 86);
-    else if (temp <= 35) p = Math.max(p, 78);
-    else if (temp <= 35.5) p = Math.max(p, 42);
+    if (temp <= 34) p = Math.max(p, TRIAGE_BANDS.RESUSCITATION);
+    else if (temp <= 35) p = Math.max(p, TRIAGE_BANDS.ESI_I);
+    else if (temp <= 35.5) p = Math.max(p, TRIAGE_BANDS.ESI_III);
   }
-  if (sbp >= 180 || dbp >= 120) p = Math.max(p, 42);
-  if (sbp >= 200) p = Math.max(p, 62);
-  if (Number.isFinite(sbp) && Number.isFinite(dbp) && sbp < dbp) p = Math.max(p, 62);
-  if (sbp > 0 && sbp < 90) p = Math.max(p, 42);
-  if ((row.conditionId || row.lesionId) === "paro") p = Math.max(p, 97);
+  if (sbp >= 180 || dbp >= 120) p = Math.max(p, TRIAGE_BANDS.ESI_III);
+  if (sbp >= 200) p = Math.max(p, TRIAGE_BANDS.ESI_II);
+  if (Number.isFinite(sbp) && Number.isFinite(dbp) && sbp < dbp) p = Math.max(p, TRIAGE_BANDS.ESI_II);
+  if (sbp > 0 && sbp < 90) p = Math.max(p, TRIAGE_BANDS.ESI_III);
+  if ((row.conditionId || row.lesionId) === "paro") p = Math.max(p, TRIAGE_BANDS.CARDIAC_ARREST);
   const cond = findSymptom(row.conditionId || row.lesionId)
     || CONDITIONS.find((c) => c.id === (row.conditionId || row.lesionId));
   p = Math.max(p, catalogEsiFloor(cond?.severity ?? row.conditionSeverity, row));
-  return Math.min(100, Math.max(0, Math.round(p * 10) / 10));
+  return Math.min(TRIAGE_BANDS.MAX, Math.max(TRIAGE_BANDS.MIN, Math.round(p * 10) / 10));
 }
 
 export function priorityFromScore(score) {
-  if (score >= 78) return { id: "I", name: "Reanimación", tone: "i", esi: "ESI I", chip: "Crítica", meaning: "Hay que atenderlo ya: el cuerpo está en peligro inmediato." };
-  if (score >= 62) return { id: "II", name: "Emergencia", tone: "ii", esi: "ESI II", chip: "Alta", meaning: "No puede esperar mucho: el riesgo es alto y debe ir adelante en la cola." };
-  if (score >= 42) return { id: "III", name: "Urgente", tone: "iii", esi: "ESI III", chip: "Media", meaning: "Necesita atención pronto, pero hay casos más graves primero." };
-  if (score >= 22) return { id: "IV", name: "Menos urgente", tone: "iv", esi: "ESI IV", chip: "Baja", meaning: "Puede esperar un rato; no parece un riesgo vital ahora." };
+  if (score >= TRIAGE_BANDS.ESI_I) return { id: "I", name: "Reanimación", tone: "i", esi: "ESI I", chip: "Crítica", meaning: "Hay que atenderlo ya: el cuerpo está en peligro inmediato." };
+  if (score >= TRIAGE_BANDS.ESI_II) return { id: "II", name: "Emergencia", tone: "ii", esi: "ESI II", chip: "Alta", meaning: "No puede esperar mucho: el riesgo es alto y debe ir adelante en la cola." };
+  if (score >= TRIAGE_BANDS.ESI_III) return { id: "III", name: "Urgente", tone: "iii", esi: "ESI III", chip: "Media", meaning: "Necesita atención pronto, pero hay casos más graves primero." };
+  if (score >= TRIAGE_BANDS.ESI_IV) return { id: "IV", name: "Menos urgente", tone: "iv", esi: "ESI IV", chip: "Baja", meaning: "Puede esperar un rato; no parece un riesgo vital ahora." };
   return { id: "V", name: "No urgente", tone: "v", esi: "ESI V", chip: "Mínima", meaning: "Es el menos grave de la sala con los datos actuales." };
 }
 

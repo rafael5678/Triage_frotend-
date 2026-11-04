@@ -1,3 +1,5 @@
+import { TRIAGE_BANDS, esiFloorFromSeverity } from "./triageBands";
+
 let liveSymptoms = [];
 
 export function setSymptomCatalog(rows) {
@@ -34,16 +36,11 @@ function measuredCrisis(row) {
   return avpu === "P" || avpu === "U" || avpu === "V";
 }
 
-/** Piso ESI: 78 crítica, 62 alta, 42 media. Un dedo con signos estables no se pega a crítica. */
+/** ESI floor from catalog gravity. A finger with stable vitals does not stick at ESI I. */
 export function catalogEsiFloor(severity, row) {
-  const n = Number(severity);
-  if (!Number.isFinite(n)) return 0;
-  let floor = 0;
-  if (n >= 78) floor = 78;
-  else if (n >= 62) floor = 62;
-  else if (n >= 42) floor = 42;
+  const floor = esiFloorFromSeverity(severity);
   if (row == null) return floor;
   const id = row.conditionId || row.lesionId;
   if (EMERGENCY_MOTIFS.has(id) || measuredCrisis(row)) return floor;
-  return 0;
+  return TRIAGE_BANDS.MIN;
 }
