@@ -83,7 +83,7 @@ export function predictScore(model, row) {
   if ((row.conditionId || row.lesionId) === "paro") p = Math.max(p, 97);
   const cond = findSymptom(row.conditionId || row.lesionId)
     || CONDITIONS.find((c) => c.id === (row.conditionId || row.lesionId));
-  p = Math.max(p, catalogEsiFloor(cond?.severity ?? row.conditionSeverity));
+  p = Math.max(p, catalogEsiFloor(cond?.severity ?? row.conditionSeverity, row));
   return Math.min(100, Math.max(0, Math.round(p * 10) / 10));
 }
 
