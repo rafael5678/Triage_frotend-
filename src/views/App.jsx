@@ -88,6 +88,17 @@ function Logo() {
   );
 }
 
+function matchesSearch(patient, raw) {
+  const q = String(raw || "").trim().toLowerCase();
+  if (!q) return true;
+  const name = String(patient.name || "").toLowerCase();
+  const doc = String(patient.document || "").replace(/\D/g, "");
+  const digits = q.replace(/\D/g, "");
+  if (digits.length >= 3 && doc.includes(digits)) return true;
+  if (digits && digits === q && doc.endsWith(digits)) return true;
+  return name.includes(q);
+}
+
 function Chip({ priority }) {
   return <span className={`chip ${priority.tone}`}>{priority.chip}</span>;
 }
@@ -142,6 +153,7 @@ export default function App() {
   const [historyFor, setHistoryFor] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const reloadTimer = useRef(null);
+  const confirmLock = useRef(false);
 
   const waiting = useMemo(
     () => patients.filter((p) => p.status === "En espera").sort(comparePriority),
@@ -257,10 +269,18 @@ export default function App() {
 
   function logout() {
     sessionStorage.removeItem(SESSION_KEY);
+    confirmLock.current = false;
     setUser(null);
     setPatients([]);
     setCatalog([]);
     setSymptomCatalog([]);
+    setQuery("");
+    setHistoryFor(null);
+    setSelected(null);
+    setResult(null);
+    setForm(EMPTY_FORM);
+    setView("queue");
+    setLiveQueue({ loading: true, patients: [] });
   }
 
   async function analyze(event) {
@@ -304,12 +324,13 @@ export default function App() {
   }
 
   async function confirmEntry() {
-    if (confirmBusy) return;
+    if (confirmBusy || confirmLock.current) return;
     const wa = phoneError(result.phone);
     if (String(result.phone || "").trim() && wa) {
       setConfirmError(wa);
       return;
     }
+    confirmLock.current = true;
     setConfirmBusy(true);
     setConfirmError("");
     try {
@@ -339,6 +360,7 @@ export default function App() {
       setView("queue");
       setResult(null);
     } catch (error) {
+      confirmLock.current = false;
       setConfirmError(error.message || "No se pudo guardar en la cola.");
       flash(`No se guardó en la cola: ${error.message}`);
     } finally {
@@ -428,10 +450,7 @@ export default function App() {
     setView("queue");
   }
 
-  const filtered = patients.filter((p) => {
-    const q = query.toLowerCase();
-    return !q || (p.name || "").toLowerCase().includes(q) || String(p.document || "").includes(q);
-  });
+  const filtered = patients.filter((p) => matchesSearch(p, query));
 
   const topWaiting = liveQueue.patients[0];
   const selectedExplain = selected ? explainWhy(selected) : null;
@@ -505,7 +524,13 @@ export default function App() {
         <Logo />
         <nav>
           {NAV.map(([id, label]) => (
-            <button key={id} className={view === id || (id === "intake" && view === "result") ? "on" : ""} onClick={() => setView(id)}>
+            <button key={id} className={view === id || (id === "intake" && view === "result") ? "on" : ""} onClick={() => {
+              setView(id);
+              if (id !== "history" && id !== "patients") {
+                setQuery("");
+                setHistoryFor(null);
+              }
+            }}>
               {label}
             </button>
           ))}
@@ -521,7 +546,7 @@ export default function App() {
 
       <div className="stage">
         <header className="bar">
-          <input placeholder="Buscar por nombre o documento…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <p className="bar-title">{NAV.find(([id]) => id === view || (id === "intake" && view === "result"))?.[1] || "TriageIA"}</p>
           <div className="bar-meta">
             <span className={`live ${live ? "on" : "off"}`} title={live ? "La cola se actualiza sola cuando algo cambia" : "Sin conexión en vivo: se actualiza cada minuto"}>
               {waiting.length} en espera · {live ? "en vivo" : "cada minuto"}
@@ -657,10 +682,10 @@ export default function App() {
                 <Field label="Nombre">
                   <input required placeholder="Nombre y apellido" value={form.name} onChange={(e) => setField("name", e.target.value)} />
                 </Field>
-                <Field label="Documento">
-                  <input required inputMode="numeric" maxLength={10} placeholder="Cédula, 5 a 10 dígitos" value={form.document} onChange={(e) => setField("document", documentDigits(e.target.value))} />
+                <Field className="full id-field" label="Cédula o TI">
+                  <input required inputMode="numeric" maxLength={10} placeholder="Ejemplo: 1078564326" value={form.document} onChange={(e) => setField("document", documentDigits(e.target.value))} />
                   {documentError(form.document) && <small className="vital-live bad">{documentError(form.document)}</small>}
-                  {!documentError(form.document) && <small className="hint">Solo números. Cédula o TI: mínimo 5, máximo 10.</small>}
+                  {!documentError(form.document) && <small className="hint">Solo números. Cédula o tarjeta de identidad: de 5 a 10 dígitos.</small>}
                 </Field>
                 <Field className="full" label="WhatsApp (celular colombiano)">
                   <input type="tel" inputMode="numeric" maxLength={10} placeholder="3001234567" value={form.phone} onChange={(e) => setField("phone", String(e.target.value || "").replace(/\D/g, "").slice(0, 10))} />
@@ -705,10 +730,10 @@ export default function App() {
               <p className="sub">
                 Oxígeno: clip en el dedo. Pulso: el mismo clip o la muñeca. Presión: tensiómetro (el de arriba / el de abajo).
                 Temperatura: frente o axila. Respiración: cuente el pecho 1 minuto.
-                Si está ensayando y no tiene aparatos, use reposo para la edad que escribió.
+                Si aún no midió un signo, use el reposo normal para esa edad.
               </p>
               <button type="button" className="ghost" onClick={() => applyForm(fillRestingIfEmpty(form))}>
-                Usar signos de reposo para esta edad (ensayo)
+                Usar signos de reposo para esta edad
               </button>
               <div className="g3 vitals-grid">
                 <Field label="Oxígeno %" rangeKey="spo2" age={form.age} ask="Saturación de oxígeno (SpO2, %)" value={form.spo2} context={caseContext} estimated={form.estimatedFields.includes("spo2")}>
@@ -882,6 +907,7 @@ export default function App() {
         {view === "patients" && (
           <section className="page">
             <h1>Pacientes (base de datos)</h1>
+            <input className="search-box" placeholder="Buscar por nombre o cédula…" value={query} onChange={(e) => setQuery(e.target.value)} />
             <div className="sheet table-wrap">
               {filtered.length === 0 && <p className="muted">No hay registros todavía.</p>}
               <table>
@@ -924,6 +950,17 @@ export default function App() {
           <section className="page">
             <h1>Historial</h1>
             <p className="sub">Cada vez que se toman los signos queda guardado: quién los tomó, cómo cambió el puntaje y cuándo pasó a atención.</p>
+            <input
+              className="search-box"
+              placeholder="Buscar por nombre o cédula…"
+              value={query}
+              onChange={(e) => {
+                const next = e.target.value;
+                setQuery(next);
+                setHistoryFor((current) => (current && matchesSearch(current, next) ? current : null));
+              }}
+            />
+            {query.trim() && filtered.length === 0 && <p className="muted">Nadie coincide con “{query.trim()}”.</p>}
             <div className="split">
               <div className="sheet table-wrap">
                 <table>
@@ -942,8 +979,8 @@ export default function App() {
                 </table>
               </div>
               <aside className="sheet">
-                {!historyFor && <p className="muted">Toque un paciente para ver su evolución.</p>}
-                {historyFor && (
+                {!(historyFor && matchesSearch(historyFor, query)) && <p className="muted">Toque un paciente para ver su evolución.</p>}
+                {historyFor && matchesSearch(historyFor, query) && (
                   <>
                     <h3>{historyFor.name}</h3>
                     <p className="muted">{historyFor.age} años · {conditionLabel(historyFor.conditionId)}{historyFor.pregnant ? ` · embarazo${historyFor.gestationWeeks ? ` de ${historyFor.gestationWeeks} semanas` : ""}` : ""}</p>
@@ -960,7 +997,7 @@ export default function App() {
             <h1>Cómo se calcula</h1>
             <p className="sub">
               El puntaje de la cola sale del protocolo (NEWS2, signos, motivo y enfermedades) y, si hay llave configurada, Gemini puede subir un poco el riesgo si el relato clínico lo justifica. Nunca lo baja si los signos ya están graves.
-              El gráfico de abajo es el modelo local de práctica ({pack.train.length} ejemplos; error medio {pack.metrics.mae} puntos).
+              El gráfico de abajo es el modelo local de referencia ({pack.train.length} ejemplos; error medio {pack.metrics.mae} puntos).
             </p>
             <div className="split">
               <div className="sheet">

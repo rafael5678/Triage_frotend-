@@ -137,8 +137,7 @@ export function crashWarning(form) {
   if (!bad.length) return "";
   const list = bad.map((r) => `${r.label} ${r.value}${r.unit ? r.unit : ""} (${r.badge}; normal ${r.normal})`).join("; ");
   return `Estos números no son normales para esa edad: ${list}. `
-    + "Así el puntaje sube aunque el motivo sea leve. "
-    + "Si está practicando, use los signos de reposo de esa edad. Si los midió de verdad, calcule igual.";
+    + "Eso es peligroso: el puntaje sube aunque el motivo sea leve. Si los midió de verdad, acepte y calcule.";
 }
 
 export function fillRestingIfEmpty(form) {

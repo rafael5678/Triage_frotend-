@@ -31,6 +31,7 @@ export default function AdminPortal({ user, onLogout }) {
   const [userForm, setUserForm] = useState(EMPTY_USER);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState("");
 
   function flash(message) {
     setToast(message);
@@ -237,6 +238,7 @@ export default function AdminPortal({ user, onLogout }) {
           <section className="page">
             <h1>Pacientes registrados</h1>
             <p className="sub">Los ingresos los hace el personal. Aquí solo se consultan los que ya están en la base.</p>
+            <input className="search-box" placeholder="Buscar por nombre o cédula…" value={query} onChange={(e) => setQuery(e.target.value)} />
             <div className="sheet table-wrap">
               {patients.length === 0 && <p className="muted">No hay pacientes todavía.</p>}
               <table>
@@ -244,7 +246,13 @@ export default function AdminPortal({ user, onLogout }) {
                   <tr><th>Persona</th><th>Documento</th><th>Puntaje</th><th>Estado</th></tr>
                 </thead>
                 <tbody>
-                  {patients.sort(comparePriority).map((p) => (
+                  {patients.filter((p) => {
+                    const q = query.trim().toLowerCase();
+                    if (!q) return true;
+                    const digits = q.replace(/\D/g, "");
+                    const doc = String(p.document || "").replace(/\D/g, "");
+                    return String(p.name || "").toLowerCase().includes(q) || (digits.length >= 3 && doc.includes(digits));
+                  }).sort(comparePriority).map((p) => (
                     <tr key={p.id}>
                       <td>{p.name}</td>
                       <td>{p.document}</td>
