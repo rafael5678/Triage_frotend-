@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createUser, fetchAdminSymptoms, fetchAdminUsers, fetchPatients, saveSymptom, setUserActive } from "../services/api";
 import { comparePriority } from "../models/patient";
+import { priorityFromScore } from "../ml/model";
 import StatsView from "./StatsView";
 
 function Logo() {
@@ -32,6 +33,7 @@ export default function AdminPortal({ user, onLogout }) {
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
+  const severityPreview = priorityFromScore(Number(symptomForm.severity) || 0);
 
   function flash(message) {
     setToast(message);
@@ -137,22 +139,33 @@ export default function AdminPortal({ user, onLogout }) {
             <h1>Síntomas del formulario</h1>
             <p className="sub">Cada fila es una opción del menú “¿Qué le pasa?”. La gravedad (0–100) ayuda a ordenar la cola.</p>
             <div className="split">
-            <form className="sheet" onSubmit={onSaveSymptom}>
-              <div className="g2">
-                <label>Texto que verá el personal
-                  <input required value={symptomForm.label} onChange={(e) => setSymptomForm({ ...symptomForm, label: e.target.value })} />
-                </label>
-                <label>Gravedad (0 a 100)
-                  <input required type="number" min="0" max="100" value={symptomForm.severity} onChange={(e) => setSymptomForm({ ...symptomForm, severity: e.target.value })} />
-                </label>
-                <label className="full">Ayuda corta (opcional)
-                  <input value={symptomForm.hint} onChange={(e) => setSymptomForm({ ...symptomForm, hint: e.target.value })} />
-                </label>
+            <form className="sheet symptom-form" onSubmit={onSaveSymptom}>
+              <h3>Agregar síntoma</h3>
+              <label>Texto que verá el personal
+                <input required value={symptomForm.label} onChange={(e) => setSymptomForm({ ...symptomForm, label: e.target.value })} />
+              </label>
+              <label>Ayuda corta (opcional)
+                <input value={symptomForm.hint} onChange={(e) => setSymptomForm({ ...symptomForm, hint: e.target.value })} />
+              </label>
+              <label>Gravedad (0 a 100)
+                <input required type="range" min="0" max="100" value={Number(symptomForm.severity) || 0} onChange={(e) => setSymptomForm({ ...symptomForm, severity: e.target.value })} />
+                <input required type="number" min="0" max="100" value={symptomForm.severity} onChange={(e) => setSymptomForm({ ...symptomForm, severity: e.target.value })} />
+              </label>
+              <div className={`severity-preview ${severityPreview.tone}`}>
+                <span className={`score-tile ${severityPreview.tone}`}>{Number(symptomForm.severity) || 0}</span>
+                <div>
+                  <b>{severityPreview.chip}</b>
+                  <p className="muted">{severityPreview.meaning}</p>
+                </div>
+                <i className="severity-bar" style={{ width: `${Math.min(100, Math.max(0, Number(symptomForm.severity) || 0))}%` }} />
               </div>
-              <button className="btn" disabled={busy} type="submit">{symptomForm.id ? "Actualizar síntoma" : "Agregar síntoma"}</button>
-              {symptomForm.id && (
-                <button className="ghost" type="button" onClick={() => setSymptomForm(EMPTY_SYMPTOM)}>Cancelar edición</button>
-              )}
+              <p className="hint">78 Crítica · 62 Alta · 42 Media · 22 Baja · 0 Mínima. Ese número alimenta el puntaje de la cola.</p>
+              <div className="row-btns form-actions">
+                <button className="btn" disabled={busy} type="submit">{symptomForm.id ? "Actualizar síntoma" : "Agregar síntoma"}</button>
+                {symptomForm.id && (
+                  <button className="ghost" type="button" onClick={() => setSymptomForm(EMPTY_SYMPTOM)}>Cancelar edición</button>
+                )}
+              </div>
             </form>
             <div className="sheet table-wrap" style={{ marginTop: 16 }}>
               <table>

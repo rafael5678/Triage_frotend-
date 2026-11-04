@@ -337,6 +337,32 @@ td { padding: 12px 8px; border-bottom: 1px solid #efe8dc; vertical-align: top; }
 .wait-bar i { display: block; height: 100%; background: #e8c37a; }
 .glass-now, .glass-status { display: block; margin-top: 10px; font-size: 12px; line-height: 1.4; opacity: .85; }
 /* Ingreso con IA */
+.symptom-form { display: grid; gap: 14px; align-content: start; }
+.symptom-form .form-actions { margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+.severity-preview {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 12px;
+  align-items: center;
+  background: var(--sand);
+  border-radius: 16px;
+  padding: 14px;
+}
+.severity-preview .muted { margin: 4px 0 0; }
+.severity-bar {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 99px;
+  display: block;
+  background: currentColor;
+  max-width: 100%;
+}
+.severity-preview.i { color: var(--i); }
+.severity-preview.ii { color: var(--ii); }
+.severity-preview.iii { color: var(--iii); }
+.severity-preview.iv { color: var(--iv); }
+.severity-preview.v { color: var(--v); }
+.symptom-form input[type="range"] { width: 100%; accent-color: var(--gold-edge); }
 .step-num {
   display: inline-grid; place-items: center;
   width: 22px; height: 22px; margin-right: 8px;
