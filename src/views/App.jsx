@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COMORBIDITIES } from "../ml/conditions";
-import { featureContributions, getModel, predictScore } from "../ml/model";
+import { getModel, predictScore } from "../ml/model";
 import { comparePriority, createPatient, documentAgeHint, documentDigits, documentError, isElderly, ticketCode } from "../models/patient";
 import { explainWhy } from "../models/explain";
 import {
@@ -355,7 +355,6 @@ export default function App() {
     }
     setAnalyzeBusy(true);
     const local = createPatient(toPayload(form), pack.model);
-    local.contributions = featureContributions(pack.model, local);
     try {
       const scored = await analyzeTriage(toPayload(form), local.score);
       const patient = {
@@ -419,7 +418,6 @@ export default function App() {
         id: patientId,
         status: result.status || "En espera",
         statusCode: result.statusCode || "EN_ESPERA",
-        contributions: result.contributions,
         immediateActions: result.immediateActions,
         testsToOrder: result.testsToOrder,
         monitoring: result.monitoring,
@@ -445,7 +443,7 @@ export default function App() {
       }
       saveEvaluation(payload, patientId)
         .then((scored) => {
-          setPatients((list) => [ { ...saved, ...scored, contributions: saved.contributions }, ...list.filter((p) => p.id !== patientId) ].sort(comparePriority));
+          setPatients((list) => [ { ...saved, ...scored }, ...list.filter((p) => p.id !== patientId) ].sort(comparePriority));
         })
         .catch((err) => flash(`Quedó en la sala; el puntaje se está guardando: ${err.message}`));
     } catch (error) {
@@ -457,7 +455,7 @@ export default function App() {
   }
 
   function replacePatient(updated) {
-    setPatients((list) => list.map((p) => (p.id === updated.id ? { ...p, ...updated, contributions: p.contributions } : p)));
+    setPatients((list) => list.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)));
     setSelected((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
   }
 
@@ -963,14 +961,6 @@ export default function App() {
                 {result.iaActive && !(result.geminiReasons || []).length && (
                   <p className="muted">No hubo frases extra: las acciones están arriba, en qué hacer con el paciente.</p>
                 )}
-                <p className="muted small">La barra verde es cuántos puntos de gravedad aporta ese dato al puntaje (0 a 100). No es una nota sobre 9: un +7 en el motivo suma 7 puntos.</p>
-                {(result.contributions || []).filter((f) => Math.abs(f.weight) >= 0.5).slice(0, 4).map((f) => (
-                  <div key={f.id} className="barline">
-                    <span>{f.name}</span>
-                    <i><b style={{ width: `${Math.min(100, Math.abs(f.weight) * 8)}%` }} /></i>
-                    <em>{f.weight > 0 ? "+" : ""}{f.weight}</em>
-                  </div>
-                ))}
               </div>
             </div>
             <div className="sheet wa-box">
