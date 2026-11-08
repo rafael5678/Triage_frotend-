@@ -10,6 +10,7 @@ import {
 import { estimateWaitMinutes, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
 import { AVPU } from "../models/levels";
+import { loginFieldError, withoutSpaces } from "../models/credentials";
 import { isValidWhatsApp, minutesLabel, noticeDue, phoneError, waitInfo, whatsappLink } from "../models/notice";
 import { crashWarning, fillRestingIfEmpty, invertedPressure, refreshEstimatedRest, vitalHint } from "../models/vitals";
 import AdminPortal from "./AdminPortal";
@@ -312,10 +313,17 @@ export default function App() {
 
   async function onLogin(event) {
     event.preventDefault();
+    const username = withoutSpaces(login.username);
+    const password = withoutSpaces(login.password);
+    const invalid = loginFieldError(username, password);
+    if (invalid) {
+      setLoginError(invalid);
+      return;
+    }
     setLoginBusy(true);
     setLoginError("");
     try {
-      const session = await loginRequest(login);
+      const session = await loginRequest({ username, password });
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
       setUser(session);
     } catch (error) {
@@ -582,13 +590,14 @@ export default function App() {
           <h1>Entra quien está <em>más grave</em>, no quien llegó primero.</h1>
           <p className="lede">Ingresa con la cuenta asignada por el administrador. El sistema abre enfermería o administración según esas credenciales.</p>
           <form className="auth-form" onSubmit={onLogin}>
-            <label>Usuario<input autoComplete="username" value={login.username} onChange={(e) => setLogin({ ...login, username: e.target.value })} /></label>
+            <label>Usuario<input autoComplete="username" spellCheck={false} maxLength={32} value={login.username} onChange={(e) => setLogin({ ...login, username: withoutSpaces(e.target.value) })} /></label>
             <label>Contraseña
               <span className="pass-wrap">
-                <input type={showPassword ? "text" : "password"} autoComplete="current-password" value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} />
+                <input type={showPassword ? "text" : "password"} autoComplete="current-password" maxLength={64} value={login.password} onChange={(e) => setLogin({ ...login, password: withoutSpaces(e.target.value) })} />
                 <button type="button" className="text show-pass" onClick={() => setShowPassword((v) => !v)}>{showPassword ? "Ocultar" : "Mostrar"}</button>
               </span>
             </label>
+            <p className="hint">Usuario y contraseña sin espacios. La clave va de 8 a 64 caracteres.</p>
             {loginError && <p className="form-err">{loginError}</p>}
             <button className="btn wide" type="submit" disabled={loginBusy}>{loginBusy ? "Comprobando…" : "Entrar →"}</button>
           </form>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createUser, fetchAdminSymptoms, fetchAdminUsers, fetchPatients, saveSymptom, setUserActive } from "../services/api";
 import { comparePriority } from "../models/patient";
+import { loginFieldError, withoutSpaces, PASSWORD_MIN, PASSWORD_MAX, USERNAME_MIN, USERNAME_MAX } from "../models/credentials";
 import { priorityFromScore } from "../ml/model";
 import StatsView from "./StatsView";
 
@@ -82,9 +83,16 @@ export default function AdminPortal({ user, onLogout }) {
 
   async function onCreateUser(event) {
     event.preventDefault();
+    const username = withoutSpaces(userForm.username);
+    const password = withoutSpaces(userForm.password);
+    const invalid = loginFieldError(username, password);
+    if (invalid) {
+      flash(invalid);
+      return;
+    }
     setBusy(true);
     try {
-      await createUser(userForm);
+      await createUser({ ...userForm, username, password });
       setUserForm(EMPTY_USER);
       await reload();
       flash("Cuenta creada. Esa persona ya puede entrar con su usuario.");
@@ -207,10 +215,12 @@ export default function AdminPortal({ user, onLogout }) {
                   <input required value={userForm.displayName} onChange={(e) => setUserForm({ ...userForm, displayName: e.target.value })} />
                 </label>
                 <label>Usuario
-                  <input required autoComplete="off" value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} />
+                  <input required autoComplete="off" maxLength={USERNAME_MAX} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: withoutSpaces(e.target.value) })} />
+                  <small className="hint">{USERNAME_MIN} a {USERNAME_MAX} caracteres, sin espacios</small>
                 </label>
                 <label>Contraseña
-                  <input required type="password" autoComplete="new-password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
+                  <input required type="password" autoComplete="new-password" maxLength={PASSWORD_MAX} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: withoutSpaces(e.target.value) })} />
+                  <small className="hint">{PASSWORD_MIN} a {PASSWORD_MAX} caracteres, sin espacios</small>
                 </label>
                 <label>Módulo
                   <select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}>
