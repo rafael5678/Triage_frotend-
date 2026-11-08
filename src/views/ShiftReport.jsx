@@ -32,8 +32,25 @@ function windowOf(shiftId, dateIso) {
 
 function dayWindow(dateIso) {
   const [y, m, d] = dateIso.split("-").map(Number);
-  const start = new Date(y, m - 1, d, 0, 0, 0).getTime();
+  const start = new Date(y, m - 1, d, 7, 0, 0).getTime();
   return { start, end: start + 24 * 3600000 };
+}
+
+function minutesToCare(p) {
+  if (!p.careStartedAt || !p.arrivedAt) return null;
+  return Math.max(0, Math.round((p.careStartedAt - p.arrivedAt) / 60000));
+}
+
+function levelKeyOf(p) {
+  if (p.triageLevel && LEVELS[p.triageLevel]) return p.triageLevel;
+  const chip = p.priority?.chip;
+  return Object.keys(LEVELS).find((k) => LEVELS[k].chip === chip) || p.triageLevel;
+}
+
+function percentile(sorted, p) {
+  if (!sorted.length) return null;
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[idx];
 }
 
 function arrivedMs(p) {
@@ -93,27 +110,37 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
       .filter((p) => stillInHospital(p) && arrivedMs(p) && arrivedMs(p) < start)
       .sort((a, b) => arrivedMs(a) - arrivedMs(b));
     const now = Date.now();
-    const cared = rows.filter((p) => p.careStartedAt);
-    const toCare = cared.map((p) => Math.max(0, Math.round((p.careStartedAt - p.arrivedAt) / 60000)));
-    const onTime = cared.filter((p) => (p.careStartedAt - p.arrivedAt) / 60000 <= (p.maxWaitMinutes ?? 30)).length;
+    const startedCare = rows.filter((p) => p.careStartedAt);
+    const finished = rows.filter((p) => p.status === "Atendido" || p.statusCode === "ATENDIDO");
+    const toCare = startedCare.map(minutesToCare).filter((n) => n != null);
+    const onTime = startedCare.filter((p) => {
+      const minutes = minutesToCare(p);
+      if (minutes == null) return false;
+      return minutes <= (p.maxWaitMinutes ?? 30);
+    }).length;
     const stillWaiting = rows.filter((p) => p.status === "En espera");
     const overdue = stillWaiting.filter((p) => waitInfo(p, now).overdue);
     const absent = stillWaiting.filter((p) => p.present === false);
     const avg = toCare.length ? Math.round(toCare.reduce((a, b) => a + b, 0) / toCare.length) : null;
     const sorted = [...toCare].sort((a, b) => a - b);
-    const p90 = sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9))] : null;
+    const slowest = sorted.length ? sorted[sorted.length - 1] : null;
+    const p90 = toCare.length >= 5 ? percentile(sorted, 90) : slowest;
     return {
       rows,
       todayRows,
       carryover,
-      cared,
+      startedCare,
+      finished,
       avg,
       p90,
-      onTimePercent: cared.length ? Math.round((onTime / cared.length) * 100) : null,
+      slowest,
+      useP90: toCare.length >= 5,
+      onTime,
+      onTimePercent: startedCare.length ? Math.round((onTime / startedCare.length) * 100) : null,
       stillWaiting,
       overdue,
       absent,
-      byLevel: count(rows, (p) => p.triageLevel),
+      byLevel: count(rows, levelKeyOf),
       byArea: count(rows, (p) => p.destinationArea),
       codes: count(rows, (p) => (p.destinationCode || "").split(" · ").find((c) => c.startsWith("Código"))),
       notified: count(rows, (p) => p.notifiedChannel),
@@ -168,7 +195,7 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
       </div>
       <p className="sub no-print">
         Este turno ({shift.label}): <b>{report.rows.length}</b> ingreso{report.rows.length === 1 ? "" : "s"}.
-        {" "}Hoy {date}: <b>{report.todayRows.length}</b> en total.
+        {" "}Día 7:00–7:00 del {date}: <b>{report.todayRows.length}</b> en total.
         {shiftId !== "dia" && report.todayRows.length > report.rows.length
           ? " Los que llegaron en otra franja aparecen al elegir Mañana, Noche o Día completo."
           : ""}
@@ -184,11 +211,17 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
 
       <div className="stats">
         <article><small>Ingresos de este turno</small><b>{report.rows.length}</b></article>
-        <article><small>Ingresos del día</small><b>{report.todayRows.length}</b></article>
-        <article><small>Atendidos</small><b>{report.cared.length}</b></article>
+        <article><small>Ingresos del día (7:00–7:00)</small><b>{report.todayRows.length}</b></article>
+        <article><small>Pasaron a atención</small><b>{report.startedCare.length}</b></article>
         <article><small>Minutos hasta atención (promedio)</small><b>{report.avg ?? "—"}</b></article>
-        <article><small>El 90% se atendió en</small><b>{report.p90 == null ? "—" : `${report.p90} min`}</b></article>
-        <article className={report.onTimePercent != null && report.onTimePercent < 80 ? "crit" : ""}><small>Atendidos dentro de su meta</small><b>{report.onTimePercent == null ? "—" : `${report.onTimePercent}%`}</b></article>
+        <article>
+          <small>{report.useP90 ? "9 de cada 10 pasó a atención en" : "El que más tardó a atención"}</small>
+          <b>{report.p90 == null ? "—" : `${report.p90} min`}</b>
+        </article>
+        <article className={report.onTimePercent != null && report.onTimePercent < 80 ? "crit" : ""}>
+          <small>Dentro de su meta de espera</small>
+          <b>{report.startedCare.length ? `${report.onTime} de ${report.startedCare.length}` : "—"}</b>
+        </article>
         <article className={report.overdue.length ? "crit" : ""}><small>Siguen esperando · vencidos</small><b>{report.stillWaiting.length} · {report.overdue.length}</b></article>
       </div>
 
@@ -214,7 +247,9 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
             <li>Registrados que no han llegado a la sala: <b>{report.absent.length}</b></li>
             <li>Avisos de turno: WhatsApp automático <b>{report.notified.WHATSAPP || 0}</b> · manual <b>{report.notified.MANUAL || 0}</b></li>
             <li>Cancelados / se fueron: <b>{report.cancelled}</b></li>
+            <li>Terminaron atención (alta): <b>{report.finished.length}</b></li>
             <li>Con signos no medidos (había que tomarlos): <b>{report.estimated}</b></li>
+            <li className="muted">Minutos y meta = llegada vs. hora de pasar a atención, iguales que en el detalle. El 90% solo se muestra si hay 5 o más con hora de atención.</li>
           </ul>
           {report.overdue.length > 0 && (
             <>
@@ -237,7 +272,7 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
             <thead><tr><th>Llegó</th><th>Paciente</th><th>Nivel</th><th>Área / código</th><th>Atención</th><th>Estado</th><th>Signos</th></tr></thead>
             <tbody>
               {report.rows.map((p) => {
-                const minutes = p.careStartedAt ? Math.round((p.careStartedAt - p.arrivedAt) / 60000) : null;
+                const minutes = minutesToCare(p);
                 const late = minutes != null && minutes > (p.maxWaitMinutes ?? 30);
                 return (
                   <tr key={p.id}>
