@@ -141,7 +141,7 @@ export default function App() {
   const [analyzeBusy, setAnalyzeBusy] = useState(false);
   const [intakeError, setIntakeError] = useState("");
   const [confirmBusy, setConfirmBusy] = useState(false);
-  const [careBusy, setCareBusy] = useState(false);
+  const [passingIds, setPassingIds] = useState([]);
   const [confirmError, setConfirmError] = useState("");
   const [catalog, setCatalog] = useState([]);
   const [view, setView] = useState("queue");
@@ -159,6 +159,32 @@ export default function App() {
   const [historyFor, setHistoryFor] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const reloadTimer = useRef(null);
+  const passingRef = useRef(new Set());
+  const confirmedCareRef = useRef(new Set());
+
+  function isPassing(id) {
+    return passingIds.includes(id);
+  }
+
+  function setPassing(id, on) {
+    if (on) passingRef.current.add(id);
+    else passingRef.current.delete(id);
+    setPassingIds([...passingRef.current]);
+  }
+
+  function mergeServerList(list) {
+    return (list || []).map((p) => {
+      const hold = passingRef.current.has(p.id) || confirmedCareRef.current.has(p.id);
+      if (!hold) return p;
+      const inCare = p.status === "En atención" || p.statusCode === "EN_ATENCION";
+      if (inCare) {
+        confirmedCareRef.current.delete(p.id);
+        return p;
+      }
+      if (passingRef.current.has(p.id)) return p;
+      return { ...p, status: "En atención", statusCode: "EN_ATENCION", careStartedAt: p.careStartedAt || Date.now() };
+    });
+  }
 
   const waiting = useMemo(
     () => patients.filter((p) => p.status === "En espera").sort(comparePriority),
@@ -193,8 +219,9 @@ export default function App() {
       reloadTimer.current = setTimeout(() => {
         fetchPatients()
           .then((list) => {
-            setPatients(list);
-            setSelected((current) => (current ? list.find((p) => p.id === current.id) || current : current));
+            const next = mergeServerList(list);
+            setPatients(next);
+            setSelected((current) => (current ? next.find((p) => p.id === current.id) || current : current));
             setRefreshKey((k) => k + 1);
           })
           .catch(() => {});
@@ -230,7 +257,7 @@ export default function App() {
         setCatalog([]);
       });
     fetchPatients()
-      .then((list) => setPatients(list))
+      .then((list) => setPatients(mergeServerList(list)))
       .catch(() => setPatients([]));
   }, [user]);
 
@@ -460,31 +487,20 @@ export default function App() {
   }
 
   async function moveToCare(id) {
-    if (!id || careBusy) return;
-    setCareBusy(true);
-    const previous = patients.find((p) => p.id === id);
-    replacePatient({
-      ...(previous || selected || {}),
-      id,
-      status: "En atención",
-      statusCode: "EN_ATENCION",
-      careStartedAt: Date.now(),
-    });
-    setSelected(null);
+    if (!id || passingRef.current.has(id)) return;
+    setPassing(id, true);
     try {
       const updated = await startCare(id);
+      confirmedCareRef.current.add(id);
       replacePatient(updated);
+      setSelected((current) => (current?.id === id ? null : current));
       const minutes = updated.careStartedAt ? Math.round((updated.careStartedAt - updated.arrivedAt) / 60000) : null;
       flash(`Pasa a atención${minutes != null ? ` después de ${minutesLabel(minutes)} de espera` : ""}.`);
-      try { setPatients(await fetchPatients()); } catch { /* keep local status */ }
+      try { setPatients(mergeServerList(await fetchPatients())); } catch { /* keep local status */ }
     } catch (error) {
-      if (previous) replacePatient(previous);
-      else {
-        try { setPatients(await fetchPatients()); } catch { /* keep optimistic row */ }
-      }
       flash(error.message || "No se pudo pasar a atención. Intente de nuevo.");
     } finally {
-      setCareBusy(false);
+      setPassing(id, false);
     }
   }
 
@@ -700,13 +716,13 @@ export default function App() {
                     <button
                       type="button"
                       className="ghost"
-                      disabled={careBusy}
+                      disabled={isPassing(p.id)}
                       onClick={(event) => {
                         event.stopPropagation();
                         moveToCare(p.id);
                       }}
                     >
-                      {careBusy ? "Pasando…" : "Pasar a atención"}
+                      {isPassing(p.id) ? "Pasando…" : "Pasar a atención"}
                     </button>
                     <span className={`score-tile ${p.priority.tone}`}>{Math.round(p.score)}</span>
                     <Chip priority={p.priority} />
@@ -761,8 +777,8 @@ export default function App() {
                       </div>
                     )}
                     <div className="row-btns">
-                      <button className="btn" onClick={() => moveToCare(selected.id)} disabled={careBusy}>
-                        {careBusy ? "Pasando a atención…" : "Pasar a atención"}
+                      <button className="btn" onClick={() => moveToCare(selected.id)} disabled={isPassing(selected.id)}>
+                        {isPassing(selected.id) ? "Pasando a atención…" : "Pasar a atención"}
                       </button>
                       <button className="ghost" onClick={() => { setRecheck({ ...selected, estimatedFields: [] }); setView("recheck"); }}>Volver a medir signos</button>
                     </div>
@@ -1041,7 +1057,7 @@ export default function App() {
                         {p.status === "En atención" && <button className="ghost" onClick={() => closeCare(p.id, "ATENDIDO")}>Terminar atención</button>}
                         {p.status === "En espera" && (
                           <>
-                            <button className="btn" onClick={() => moveToCare(p.id)} disabled={careBusy}>Pasar a atención</button>
+                            <button className="btn" onClick={() => moveToCare(p.id)} disabled={isPassing(p.id)}>{isPassing(p.id) ? "Pasando…" : "Pasar a atención"}</button>
                             <button className="text" onClick={() => closeCare(p.id, "CANCELADO")}>Se fue</button>
                           </>
                         )}
