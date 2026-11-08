@@ -4,8 +4,8 @@ import { featureContributions, getModel, predictScore } from "../ml/model";
 import { comparePriority, createPatient, documentAgeHint, documentDigits, documentError, isElderly, ticketCode } from "../models/patient";
 import { explainWhy } from "../models/explain";
 import {
-  analyzeTriage, fetchPatients, fetchQueueHealth, fetchSymptoms, finishCare, login as loginRequest, markNotified,
-  registerAndScore, reevaluatePatient, setPresence, startCare, subscribeEvents,
+  analyzeTriage, createPatient as createPatientRecord, fetchPatients, fetchQueueHealth, fetchSymptoms, finishCare, login as loginRequest, markNotified,
+  saveEvaluation, reevaluatePatient, setPresence, startCare, subscribeEvents,
 } from "../services/api";
 import { estimateWaitMinutes, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
@@ -113,7 +113,7 @@ function Field({ label, help, children, className, ask, value, context, estimate
       <span className="label-row">
         {label}
         {ask && <FieldHelp field={ask} value={value} context={context} />}
-        {estimated && <span className="est-badge">Estimado por IA · medir</span>}
+        {estimated && <span className="est-badge">No medido · hay que tomar el signo</span>}
       </span>
       {children}
       {hint && <small className={`vital-live ${hint.ok ? "ok" : "bad"}`}>{hint.text}</small>}
@@ -322,7 +322,7 @@ export default function App() {
       setIntakeError(msg); flash(msg); return;
     }
     if (!form.conditionId) {
-      const msg = "Elija qué le pasa, o pulse Llenar con IA.";
+      const msg = "Elija qué le pasa, o pulse Completar el caso.";
       setIntakeError(msg); flash(msg); return;
     }
     const docMsg = documentError(form.document);
@@ -412,9 +412,13 @@ export default function App() {
         photo: null,
         photoBase64: null,
       };
+      const created = await createPatientRecord(payload);
+      const patientId = created.patientId;
       const saved = {
         ...result,
-        ...(await registerAndScore(payload)),
+        id: patientId,
+        status: result.status || "En espera",
+        statusCode: result.statusCode || "EN_ESPERA",
         contributions: result.contributions,
         immediateActions: result.immediateActions,
         testsToOrder: result.testsToOrder,
@@ -427,21 +431,23 @@ export default function App() {
         symptomExplanation: result.symptomExplanation,
       };
       saved.explanation = explainWhy(saved);
-      if (!saved.id) {
-        throw new Error("El servidor no devolvió el paciente. Intente confirmar otra vez.");
-      }
       const nextList = [saved, ...patients.filter((p) => p.id !== saved.id)].sort(comparePriority);
       setPatients(nextList);
       setForm(EMPTY_FORM);
       const ticket = saved.ticket || ticketCode(saved);
       const place = nextList.filter((p) => p.status === "En espera").findIndex((p) => p.id === saved.id) + 1;
       flash(`${saved.name} quedó en la cola · turno ${ticket} · puesto ${place || 1}.`);
+      setView("queue");
+      setResult(null);
       if (isValidWhatsApp(saved.phone)) {
         const link = whatsappLink(saved, place || 1, Date.now());
         if (link) window.open(link, "_blank", "noopener");
       }
-      setView("queue");
-      setResult(null);
+      saveEvaluation(payload, patientId)
+        .then((scored) => {
+          setPatients((list) => [ { ...saved, ...scored, contributions: saved.contributions }, ...list.filter((p) => p.id !== patientId) ].sort(comparePriority));
+        })
+        .catch((err) => flash(`Quedó en la sala; el puntaje se está guardando: ${err.message}`));
     } catch (error) {
       setConfirmError(error.message || "No se pudo guardar en la cola.");
       flash(`No se guardó en la cola: ${error.message}`);
@@ -774,7 +780,7 @@ export default function App() {
         {view === "intake" && (
           <section className="page">
             <h1>Nuevo ingreso</h1>
-            <p className="sub">1. Cuente qué pasa. 2. Pulse Llenar con IA. 3. Revise los números y calcule. El ? explica cualquier casilla.</p>
+            <p className="sub">1. Cuente qué pasa. 2. Pulse Completar el caso. 3. Revise los números y calcule. El ? explica cualquier casilla.</p>
             <form className="sheet intake-sheet" onSubmit={analyze} noValidate>
               <AiIntake form={form} onApply={applyForm} comorbidities={COMORBIDITIES} flash={flash} />
 
@@ -826,7 +832,7 @@ export default function App() {
                 )}
                 <Field className="full" label="Qué le pasa">
                   <select required value={form.conditionId} onChange={(e) => setField("conditionId", e.target.value)}>
-                    <option value="">La IA lo sugiere, o elija aquí…</option>
+                    <option value="">El relato lo sugiere, o elija aquí…</option>
                     {conditions.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                   </select>
                 </Field>
@@ -907,7 +913,7 @@ export default function App() {
                 </div>
               </details>
               {intakeError && <p className="form-err">{intakeError}</p>}
-              <button className="btn wide" type="submit" disabled={analyzeBusy}>{analyzeBusy ? "La IA está leyendo signos, relato y foto…" : "Calcular puntaje"}</button>
+              <button className="btn wide" type="submit" disabled={analyzeBusy}>{analyzeBusy ? "Leyendo signos, relato y foto…" : "Calcular puntaje"}</button>
             </form>
           </section>
         )}
@@ -918,7 +924,7 @@ export default function App() {
             <p className="sub">
               El puntaje es de gravedad: <b>100 es lo más urgente, 0 es lo más leve</b>.
               78 es Crítica, 62 Alta, 42 Media, 22 Baja, 8 Mínima. No está al revés.
-              Gemini lee pulso, oxígeno, el resto de signos, el relato y la foto; no puede bajar un caso grave.
+              El cálculo lee pulso, oxígeno, el resto de signos, el relato y la foto; no puede bajar un caso grave.
             </p>
             {crashWarning(result) && <p className="warn-line">{crashWarning(result)}</p>}
             <div className={`banner ${result.priority.tone}`}>
@@ -941,23 +947,23 @@ export default function App() {
             <Recommendations patient={result} />
             <div className="split">
               <div className="sheet">
-                <h3>Dataset del hospital</h3>
+                <h3>Protocolo del hospital</h3>
                 {result.protocolScore != null && <p className="muted">Puntaje del protocolo: {Number(result.protocolScore).toFixed(1)}</p>}
                 <ul className="why-list big">
                   {(result.datasetReasons?.length ? result.datasetReasons : result.explanation.reasons.slice(0, 3)).map((r) => <li key={r}>{r}</li>)}
                 </ul>
               </div>
               <div className="sheet">
-                <h3>Criterio de Gemini</h3>
-                {result.iaActive && result.geminiScore != null && <p className="muted">Puntaje que sugiere la IA: {Number(result.geminiScore).toFixed(1)} / 100</p>}
-                {!result.iaActive && <p className="muted">Gemini no respondió esta vez (puede estar saturado). Se usó solo el protocolo; puede volver a calcular en un momento.</p>}
-                {result.iaActive && result.photoFindings && <p><b>En la foto:</b> {result.photoFindings}</p>}
+                <h3>Qué añade la evaluación</h3>
+                {result.iaActive && result.geminiScore != null && <p className="muted">Puntaje que sugiere la evaluación: {Number(result.geminiScore).toFixed(1)} / 100</p>}
+                {!result.iaActive && <p className="muted">Esta vez se usó solo el protocolo de signos. Puede volver a calcular en un momento.</p>}
                 <ul className="why-list big">
-                  {(result.geminiReasons || []).map((r) => <li key={r}>{r}</li>)}
+                  {(result.geminiReasons || []).filter((r) => !result.photoFindings || !String(r).includes(String(result.photoFindings).slice(0, 40))).map((r) => <li key={r}>{r}</li>)}
                 </ul>
                 {result.iaActive && !(result.geminiReasons || []).length && (
-                  <p className="muted">La IA no devolvió frases sueltas; vea las recomendaciones abajo.</p>
+                  <p className="muted">No hubo frases extra: las acciones están arriba, en qué hacer con el paciente.</p>
                 )}
+                <p className="muted small">La barra verde es cuántos puntos de gravedad aporta ese dato al puntaje (0 a 100). No es una nota sobre 9: un +7 en el motivo suma 7 puntos.</p>
                 {(result.contributions || []).filter((f) => Math.abs(f.weight) >= 0.5).slice(0, 4).map((f) => (
                   <div key={f.id} className="barline">
                     <span>{f.name}</span>
@@ -1113,7 +1119,7 @@ export default function App() {
           <section className="page">
             <h1>Cómo se calcula</h1>
             <p className="sub">
-              El puntaje de la cola sale del protocolo (NEWS2, signos, motivo y enfermedades). Gemini lee también el relato y la foto y puede subir el riesgo si el conjunto lo justifica. Nunca lo baja si los signos ya están graves.
+              El puntaje de la cola sale del protocolo (NEWS2, signos, motivo y enfermedades). La evaluación también lee el relato y la foto y puede subir el riesgo si el conjunto lo justifica. Nunca lo baja si los signos ya están graves.
               El gráfico de abajo es el modelo local de referencia ({pack.train.length} ejemplos; error medio {pack.metrics.mae} puntos).
             </p>
             <div className="split">
@@ -1154,9 +1160,9 @@ export default function App() {
                 <li>Esto ayuda a ordenar la cola. No reemplaza al médico ni a la enfermería.</li>
                 <li>Si el oxígeno, la presión o la respiración están muy mal, el sistema sube el puntaje a propósito.</li>
                 <li>Los pacientes de la sala salen de la base PostgreSQL (Supabase). No se muestran nombres inventados.</li>
-                <li>La IA no decide sola: el protocolo de signos vitales manda. Un clínico confirma.</li>
-                <li>Si la IA estima un signo vital que nadie midió, queda marcado como estimado en el ingreso, en la cola y en la base. Hay que medirlo y recalcular.</li>
-                <li>Las fotos solo se envían a la IA para el análisis. No se guardan en la base; solo se guarda lo que la IA describió.</li>
+                <li>El protocolo de signos vitales manda. Un clínico confirma cada decisión.</li>
+                <li>Si un signo vital no se midió y se usó un valor de reposo, queda marcado en el ingreso, en la cola y en la base. Hay que medirlo y volver a calcular.</li>
+                <li>Las fotos se usan solo para leer el caso. No se guardan; solo queda la descripción de lo que se vio.</li>
                 <li>La pantalla pública de la sala no muestra nombres: solo iniciales y los últimos 3 números del documento.</li>
               </ul>
             </div>

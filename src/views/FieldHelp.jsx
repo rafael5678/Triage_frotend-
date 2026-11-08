@@ -27,7 +27,7 @@ export default function FieldHelp({ field, value, context }) {
     setError("");
     try {
       const answer = await explainField(field, value, context);
-      if (!answer?.active) throw new Error("La IA no respondió. Intente de nuevo en un momento.");
+      if (!answer?.active) throw new Error("No se pudo explicar ahora. Intente de nuevo en un momento.");
       cache.set(key, answer);
       setData(answer);
     } catch (e) {
@@ -39,10 +39,10 @@ export default function FieldHelp({ field, value, context }) {
 
   return (
     <span className="field-help-ai">
-      <button type="button" className="qmark" onClick={toggle} aria-label={`Qué es ${field}`} title="Pregúntele a la IA qué es esto">?</button>
+      <button type="button" className="qmark" onClick={toggle} aria-label={`Qué es ${field}`} title="Qué es este dato">?</button>
       {open && (
         <span className="help-pop" role="note">
-          {busy && <span className="muted">La IA está explicando…</span>}
+          {busy && <span className="muted">Explicando…</span>}
           {error && <span className="form-err">{error}</span>}
           {data && !busy && (
             <>

@@ -77,7 +77,7 @@ export default function StatsView({ conditionLabel = (id) => id }) {
           </div>
           <div className="stats six">
             <article><small>Llegada → atención (min, promedio)</small><b>{stats.averageTimeToCareMinutes ?? "—"}</b></article>
-            <article><small>Con IA activa</small><b>{stats.aiActivePercent == null ? "—" : `${stats.aiActivePercent}%`}</b></article>
+            <article><small>Con lectura del caso</small><b>{stats.aiActivePercent == null ? "—" : `${stats.aiActivePercent}%`}</b></article>
           </div>
           {stats.longestWaitingMinutes != null && (
             <p className="muted">La persona que más lleva esperando: {stats.longestWaitingMinutes} minutos.</p>

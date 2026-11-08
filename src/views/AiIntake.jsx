@@ -81,7 +81,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
         known,
         comorbidityOptions: comorbidities.map((c) => ({ id: c.id, label: c.label })),
       });
-      if (!s?.active) throw new Error("La IA no respondió. Llene el formulario a mano o intente en un momento.");
+      if (!s?.active) throw new Error("No se pudo completar el caso. Llene el formulario a mano o intente en un momento.");
 
       const patch = {};
       const estimated = new Set(form.estimatedFields || []);
@@ -114,8 +114,8 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
       onApply(patch);
       setNotes({ notes: s.notes || [], photoFindings: s.photoFindings, estimated: patch.estimatedFields });
       flash(estimated.size
-        ? "Gemini llenó el motivo. Los signos de reposo son guía: si puede, póngalos del oxímetro y el tensiómetro."
-        : "Gemini llenó el formulario. Revise cada dato antes de calcular.");
+        ? "Se armó el motivo. Los signos de reposo son guía: si puede, póngalos del oxímetro y el tensiómetro."
+        : "Se armó el formulario. Revise cada dato antes de calcular.");
     } catch (e) {
       flash(e.message);
     } finally {
@@ -127,7 +127,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
     <div className="ai-intake">
       <div className="ai-intake-head">
         <h3><span className="step-num">1</span> ¿Qué está pasando?</h3>
-        <p className="sub">Díctelo o escríbalo. La IA lee el relato, los signos y la foto (si hay) para armar el caso. No hace falta escribir la causa: ella la interpreta.</p>
+        <p className="sub">Díctelo o escríbalo. El relato, los signos y la foto (si hay) sirven para armar el caso. No hace falta escribir la causa: la evaluación la interpreta.</p>
       </div>
       <textarea
         rows="3"
@@ -152,14 +152,14 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
           </span>
         )}
         <button type="button" className="btn" onClick={fill} disabled={busy}>
-          {busy ? "La IA está leyendo el caso…" : "Llenar con IA"}
+          {busy ? "Leyendo el caso…" : "Completar el caso"}
         </button>
       </div>
       {notes && (
         <div className="ai-notes">
           {notes.estimated?.length > 0 && (
             <p className="warn-line">
-              Estimados por la IA (hay que medirlos): {notes.estimated.map((f) => VITAL_LABELS[f] || f).join(", ")}.
+              Signos no medidos (hay que tomarlos): {notes.estimated.map((f) => VITAL_LABELS[f] || f).join(", ")}.
             </p>
           )}
           {notes.photoFindings && <p><b>En la foto:</b> {notes.photoFindings}</p>}

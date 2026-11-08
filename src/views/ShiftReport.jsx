@@ -214,7 +214,7 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
             <li>Registrados que no han llegado a la sala: <b>{report.absent.length}</b></li>
             <li>Avisos de turno: WhatsApp automático <b>{report.notified.WHATSAPP || 0}</b> · manual <b>{report.notified.MANUAL || 0}</b></li>
             <li>Cancelados / se fueron: <b>{report.cancelled}</b></li>
-            <li>Con signos estimados por IA (había que medirlos): <b>{report.estimated}</b></li>
+            <li>Con signos no medidos (había que tomarlos): <b>{report.estimated}</b></li>
           </ul>
           {report.overdue.length > 0 && (
             <>

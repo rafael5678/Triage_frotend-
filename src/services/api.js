@@ -230,7 +230,7 @@ function vitalsBody(form, patientId, { withPhoto = true } = {}) {
   return body;
 }
 
-export async function registerAndScore(form) {
+export async function createPatient(form) {
   const created = await request(AUTH_URL, "/api/v1/triage/patients", {
     method: "POST",
     body: JSON.stringify(intakeBody(form)),
@@ -239,11 +239,20 @@ export async function registerAndScore(form) {
   if (!patientId) {
     throw new Error("No se pudo crear la ficha del paciente. Intente confirmar otra vez.");
   }
+  return { ...created, patientId };
+}
+
+export async function saveEvaluation(form, patientId) {
   const scored = await request(EVAL_URL, "/api/v1/triage/evaluations", {
     method: "POST",
     body: JSON.stringify(vitalsBody(form, patientId, { withPhoto: false })),
   }, 90000);
   return mapFromApi(scored);
+}
+
+export async function registerAndScore(form) {
+  const created = await createPatient(form);
+  return saveEvaluation(form, created.patientId);
 }
 
 export async function analyzeTriage(form, localModelScore) {

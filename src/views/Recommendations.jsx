@@ -22,7 +22,7 @@ export function EstimatedWarning({ fields }) {
   if (!fields?.length) return null;
   return (
     <p className="warn-line">
-      Signos estimados por la IA, no medidos: {fields.map((f) => VITAL_LABELS[f] || f).join(", ")}. Mídalos cuanto antes y recalcule.
+      Signos no medidos (valores de reposo): {fields.map((f) => VITAL_LABELS[f] || f).join(", ")}. Mídalos cuanto antes y vuelva a calcular.
     </p>
   );
 }
@@ -61,14 +61,26 @@ export function VitalGuide({ patient }) {
   );
 }
 
-/** Lo que la IA recomienda hacer con el paciente. */
+function sameText(a, b) {
+  const n = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const x = n(a);
+  const y = n(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const slice = Math.min(90, x.length, y.length);
+  return x.includes(y.slice(0, slice)) || y.includes(x.slice(0, slice));
+}
+
+/** Acciones y lectura clínica del caso (sin repetir la foto). */
 export default function Recommendations({ patient }) {
   const any = patient.immediateActions?.length || patient.testsToOrder?.length || patient.monitoring?.length
     || patient.redFlags?.length || patient.symptomExplanation || patient.photoFindings;
   if (!any) return null;
+  const showReading = patient.symptomExplanation
+    && !sameText(patient.symptomExplanation, patient.photoFindings);
   return (
     <div className="sheet recos">
-      <h3>Qué hacer con este paciente (IA)</h3>
+      <h3>Qué hacer con este paciente</h3>
       {patient.photoFindings && (
         <div className="reco-block photo">
           <h4>Lo que se ve en la foto</h4>
@@ -81,13 +93,13 @@ export default function Recommendations({ patient }) {
         <Block title="Qué vigilar" items={patient.monitoring} />
         <Block title="Señales de alarma" items={patient.redFlags} tone="alarm" />
       </div>
-      {patient.symptomExplanation && (
+      {showReading && (
         <div className="reco-block">
-          <h4>Qué interpreta la IA (relato, signos y foto)</h4>
+          <h4>Qué sugiere la evaluación del caso</h4>
           <p>{patient.symptomExplanation}</p>
         </div>
       )}
-      <p className="muted small">La IA orienta; quien atiende confirma cada decisión.</p>
+      <p className="muted small">Esto orienta la cola. Quien atiende confirma cada decisión.</p>
     </div>
   );
 }

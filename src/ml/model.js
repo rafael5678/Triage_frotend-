@@ -106,7 +106,7 @@ export function featureContributions(model, row) {
     temperature: "Temperatura",
     respiratoryRate: "Respiraciones por minuto",
     comorbidity: "Enfermedades que ya tenía",
-    condition: "Qué le ocurre ahora",
+    condition: "Motivo de consulta",
   };
   const predicted = predictScore(model, row);
   const baselines = {
