@@ -23,6 +23,20 @@ import StatsView from "./StatsView";
 import Timeline from "./Timeline";
 
 const SESSION_KEY = "triage.session";
+const PENDING_QUEUE_KEY = "triage.pendingQueue";
+
+function readPendingQueue() {
+  try {
+    const rows = JSON.parse(sessionStorage.getItem(PENDING_QUEUE_KEY) || "[]");
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePendingQueue(map) {
+  sessionStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify([...map.values()]));
+}
 
 const NAV = [
   ["queue", "Sala de espera"],
@@ -156,6 +170,18 @@ export default function App() {
   const passingRef = useRef(new Set());
   const confirmedCareRef = useRef(new Set());
   const pendingQueueRef = useRef(new Map());
+  const holdReloadsUntil = useRef(0);
+
+  function rememberPending(patient) {
+    if (!patient?.id) return;
+    pendingQueueRef.current.set(String(patient.id), patient);
+    writePendingQueue(pendingQueueRef.current);
+  }
+
+  function forgetPending(id) {
+    pendingQueueRef.current.delete(String(id));
+    writePendingQueue(pendingQueueRef.current);
+  }
 
   function isPassing(id) {
     return passingIds.includes(id);
@@ -187,7 +213,7 @@ export default function App() {
       if (!hit) return p;
       used.add(hit);
       if (p.status === "En espera" || p.statusCode === "EN_ESPERA") {
-        pendingQueueRef.current.delete(String(hit.id));
+        forgetPending(hit.id);
         return p;
       }
       return { ...p, ...hit, id: p.id, status: "En espera", statusCode: "EN_ESPERA" };
@@ -225,8 +251,10 @@ export default function App() {
   useEffect(() => {
     if (!user || user.role === "ADMIN") return undefined;
     const reload = () => {
+      if (Date.now() < holdReloadsUntil.current) return;
       clearTimeout(reloadTimer.current);
       reloadTimer.current = setTimeout(() => {
+        if (Date.now() < holdReloadsUntil.current) return;
         fetchPatients()
           .then((list) => {
             const next = mergeServerList(list);
@@ -260,12 +288,18 @@ export default function App() {
         setSymptomCatalog([]);
         setCatalog([]);
       });
+    for (const row of readPendingQueue()) {
+      if (row?.id) pendingQueueRef.current.set(String(row.id), row);
+    }
     fetchPatients()
       .then((list) => {
         setPatients(mergeServerList(list));
         setQueueLoading(false);
       })
-      .catch(() => setQueueLoading(false));
+      .catch(() => {
+        setPatients(mergeServerList([]));
+        setQueueLoading(false);
+      });
   }, [user]);
 
   function flash(message) {
@@ -473,20 +507,17 @@ export default function App() {
       ticket: result.ticket || ticketCode(payload),
     };
     saved.explanation = explainWhy(saved);
-    pendingQueueRef.current.set(tempId, saved);
+    rememberPending(saved);
+    holdReloadsUntil.current = Date.now() + 12000;
     const nextList = [saved, ...patients.filter((p) => p.id !== saved.id)].sort(comparePriority);
     setPatients(nextList);
     setForm(EMPTY_FORM);
     const ticket = saved.ticket || ticketCode(saved);
     const place = nextList.filter((p) => p.status === "En espera").findIndex((p) => p.id === saved.id) + 1;
-    flash(`${saved.name} quedó en la cola · turno ${ticket} · puesto ${place || 1}.`);
+    flash(`${saved.name} quedó en la cola · turno ${ticket} · puesto ${place || 1}. Aviso de WhatsApp: toque el nombre.`);
     setView("queue");
     setResult(null);
     setConfirmBusy(false);
-    const link = isValidWhatsApp(saved.phone) ? whatsappLink(saved, place || 1, Date.now()) : "";
-    if (link) {
-      window.setTimeout(() => window.open(link, "_blank", "noopener"), 400);
-    }
     void persistAdmission(payload, tempId, saved);
   }
 
@@ -496,9 +527,9 @@ export default function App() {
       try {
         const created = await createPatientRecord(payload);
         const patientId = created.patientId;
-        pendingQueueRef.current.delete(tempId);
+        forgetPending(tempId);
         const withId = { ...saved, id: patientId, status: "En espera", statusCode: "EN_ESPERA" };
-        pendingQueueRef.current.set(String(patientId), withId);
+        rememberPending(withId);
         setPatients((list) => [{ ...withId }, ...list.filter((p) => p.id !== tempId && p.id !== patientId)].sort(comparePriority));
         const scored = await saveEvaluation({ ...payload, newVisit: true }, patientId);
         const kept = {
@@ -508,7 +539,7 @@ export default function App() {
           status: "En espera",
           statusCode: "EN_ESPERA",
         };
-        pendingQueueRef.current.set(String(patientId), kept);
+        rememberPending(kept);
         setPatients((list) => [kept, ...list.filter((p) => p.id !== patientId && p.id !== tempId)].sort(comparePriority));
         return;
       } catch (error) {
@@ -857,7 +888,7 @@ export default function App() {
                 <Field className="full" label="WhatsApp (celular colombiano)">
                   <input type="tel" inputMode="numeric" maxLength={10} placeholder="3001234567" value={form.phone} onChange={(e) => setField("phone", String(e.target.value || "").replace(/\D/g, "").slice(0, 10))} />
                   <small className={phoneError(form.phone) ? "vital-live bad" : "hint"}>
-                    {phoneError(form.phone) || "Solo un celular real de Colombia (10 dígitos, empieza en 3). Al confirmar se manda el turno por WhatsApp."}
+                    {phoneError(form.phone) || "Solo un celular real de Colombia (10 dígitos, empieza en 3). Después de confirmar, toque el nombre en la cola para WhatsApp."}
                   </small>
                 </Field>
                 <Field label="Edad">
@@ -1022,14 +1053,14 @@ export default function App() {
             </div>
             <div className="sheet wa-box">
               <h3>Avisar el turno por WhatsApp</h3>
-              <p className="muted">Celular colombiano real. Al confirmar se abre WhatsApp con el turno {result.ticket || ticketCode(result)}, el puesto y el área.</p>
+              <p className="muted">Celular colombiano real. Al confirmar queda en la cola; después toque el nombre para abrir WhatsApp con el turno {result.ticket || ticketCode(result)}.</p>
               <Field label="Celular">
                 <input type="tel" inputMode="numeric" maxLength={10} placeholder="3186680042" value={result.phone || ""} onChange={(e) => {
                   setConfirmError("");
                   setResult({ ...result, phone: String(e.target.value || "").replace(/\D/g, "").slice(0, 10) });
                 }} />
               </Field>
-              {isValidWhatsApp(result.phone) && <p className="hint">Este celular sí sirve. Al confirmar se abre WhatsApp con el turno.</p>}
+              {isValidWhatsApp(result.phone) && <p className="hint">Este celular sí sirve. Confirmar no sale de la sala; el aviso de WhatsApp se abre cuando toque el nombre.</p>}
               {phoneError(result.phone) && <p className="form-err">{phoneError(result.phone)}</p>}
               {!String(result.phone || "").trim() && <p className="warn-line">Sin un celular válido no le llega el mensaje. Puede confirmar igual y avisar después.</p>}
             </div>

@@ -365,7 +365,6 @@ export function subscribeEvents(onChange, onStatus = () => {}) {
   const onVisibility = () => {
     if (document.visibilityState === "visible") {
       open();
-      onChange();
     } else {
       close();
     }
