@@ -1,3 +1,4 @@
+/** notice: staff UI module. User-facing copy stays in Spanish. */
 const DEFAULT_MAX_WAIT = 30;
 /** Igual que el backend: avisar si quedan 10 minutos o menos, o si está entre los 2 primeros. */
 export const NOTICE_LEAD_MINUTES = 10;
