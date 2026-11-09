@@ -57,7 +57,7 @@ function Chart({ rows }) {
   );
 }
 
-/** Línea de tiempo de una visita: cada vez que se midieron signos, quién lo hizo y cómo cambió el puntaje. */
+/** Línea de tiempo de una visita: cada vez que se midieron vitals, quién lo hizo y cómo cambió el score. */
 export default function Timeline({ patientId, refreshKey }) {
   const [rows, setRows] = useState([]);
   const [state, setState] = useState("loading");
