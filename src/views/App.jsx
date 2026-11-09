@@ -178,8 +178,13 @@ export default function App() {
     writePendingQueue(pendingQueueRef.current);
   }
 
-  function forgetPending(id) {
-    pendingQueueRef.current.delete(String(id));
+  function forgetPending(id, document) {
+    for (const [key, row] of [...pendingQueueRef.current.entries()]) {
+      if (String(row.id) === String(id) || (document && row.document && String(row.document) === String(document))) {
+        pendingQueueRef.current.delete(key);
+      }
+    }
+    if (id != null) pendingQueueRef.current.delete(String(id));
     writePendingQueue(pendingQueueRef.current);
   }
 
@@ -198,22 +203,28 @@ export default function App() {
     const used = new Set();
     const mapped = (list || []).map((raw) => {
       let p = raw;
+      const inCare = p.status === "En atención" || p.statusCode === "EN_ATENCION"
+        || p.status === "Atendido" || p.statusCode === "ATENDIDO"
+        || p.status === "Cancelado" || p.statusCode === "CANCELADO";
       const hold = passingRef.current.has(p.id) || confirmedCareRef.current.has(p.id);
-      if (hold) {
-        const inCare = p.status === "En atención" || p.statusCode === "EN_ATENCION";
-        if (inCare) {
-          confirmedCareRef.current.delete(p.id);
-        } else if (!passingRef.current.has(p.id)) {
-          p = { ...p, status: "En atención", statusCode: "EN_ATENCION", careStartedAt: p.careStartedAt || Date.now() };
-        }
+      if (hold && !inCare) {
+        p = { ...p, status: "En atención", statusCode: "EN_ATENCION", careStartedAt: p.careStartedAt || Date.now() };
       }
       const hit = pending.find((q) =>
         String(q.id) === String(p.id) || (q.document && p.document && String(q.document) === String(p.document))
       );
+      if (hold || inCare) {
+        if (hit) {
+          used.add(hit);
+          forgetPending(hit.id, hit.document);
+        }
+        if (inCare) confirmedCareRef.current.delete(p.id);
+        return p;
+      }
       if (!hit) return p;
       used.add(hit);
       if (p.status === "En espera" || p.statusCode === "EN_ESPERA") {
-        forgetPending(hit.id);
+        forgetPending(hit.id, hit.document);
         return p;
       }
       return { ...p, ...hit, id: p.id, status: "En espera", statusCode: "EN_ESPERA" };
@@ -557,16 +568,29 @@ export default function App() {
 
   async function moveToCare(id) {
     if (!id || passingRef.current.has(id)) return;
+    if (String(id).startsWith("local-")) {
+      flash("Un segundo: todavía se está guardando en el servidor.");
+      return;
+    }
+    const previous = patients.find((p) => p.id === id);
+    forgetPending(id, previous?.document);
     setPassing(id, true);
+    confirmedCareRef.current.add(id);
+    replacePatient({
+      ...(previous || { id }),
+      status: "En atención",
+      statusCode: "EN_ATENCION",
+      careStartedAt: previous?.careStartedAt || Date.now(),
+    });
+    setSelected((current) => (current?.id === id ? null : current));
     try {
       const updated = await startCare(id);
-      confirmedCareRef.current.add(id);
-      replacePatient(updated);
-      setSelected((current) => (current?.id === id ? null : current));
+      replacePatient({ ...updated, status: "En atención", statusCode: "EN_ATENCION" });
       const minutes = updated.careStartedAt ? Math.round((updated.careStartedAt - updated.arrivedAt) / 60000) : null;
       flash(`Pasa a atención${minutes != null ? ` después de ${minutesLabel(minutes)} de espera` : ""}.`);
-      try { setPatients(mergeServerList(await fetchPatients())); } catch { /* keep local status */ }
     } catch (error) {
+      confirmedCareRef.current.delete(id);
+      if (previous) replacePatient(previous);
       flash(error.message || "No se pudo pasar a atención. Intente de nuevo.");
     } finally {
       setPassing(id, false);
