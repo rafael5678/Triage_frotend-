@@ -1,4 +1,4 @@
-/** Nivel de triaje que devuelve el backend, con el mismo color y texto que usa la cola. */
+/** Triage level returned by the backend, with the same color and label the queue uses. */
 export const LEVELS = {
   TRIAGE_I_ROJO: { id: "I", tone: "i", chip: "Crítica", name: "Reanimación" },
   TRIAGE_II_NARANJA: { id: "II", tone: "ii", chip: "Alta", name: "Emergencia" },
