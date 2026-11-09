@@ -1,3 +1,4 @@
+/* English: identifiers in this file are English; on-screen copy stays Spanish. */
 /** Clinical catalog. `label` / `hint` are Spanish (UI). ids are English-stable keys. */
 export const CONDITIONS = [
   { id: "paro", label: "Se desmayó o no responde", hint: "No habla, no se mueve o no respira bien. Atención inmediata.", severity: 99 },
@@ -28,4 +29,5 @@ export const COMORBIDITIES = [
   { id: "cancer", label: "Cáncer en tratamiento", weight: 6 },
   { id: "inmuno", label: "Defensas bajas (quimio, trasplante, VIH, etc.)", weight: 7 },
 ];
+
 
