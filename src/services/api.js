@@ -252,7 +252,7 @@ export async function saveEvaluation(form, patientId) {
   const scored = await request(EVAL_URL, "/api/v1/triage/evaluations", {
     method: "POST",
     body: JSON.stringify(vitalsBody(form, patientId, { withPhoto: false })),
-  }, 90000);
+  }, 20000);
   return mapFromApi(scored);
 }
 
@@ -270,7 +270,7 @@ export async function analyzeTriage(form, localModelScore) {
       reason: String(form.reason || form.motivo || form.story || "").slice(0, 2000),
       localModelScore: localModelScore == null ? null : Number(localModelScore),
     }),
-  }, 120000);
+  }, 8000);
   return mapFromApi(scored);
 }
 
@@ -278,7 +278,7 @@ export async function reevaluatePatient(id, form) {
   const scored = await request(EVAL_URL, `/api/v1/triage/evaluations/${id}/reassess`, {
     method: "PUT",
     body: JSON.stringify(vitalsBody(form, null, { withPhoto: false })),
-  }, 90000);
+  }, 15000);
   return mapFromApi(scored);
 }
 
@@ -286,12 +286,12 @@ export async function startCare(id) {
   const path = `/api/v1/triage/care/${id}`;
   const viaEval = `/api/v1/triage/evaluations/${id}/status?status=EN_ATENCION`;
   try {
-    return mapFromApi(await request(QUEUE_URL, path, { method: "PATCH" }, 90000));
+    return mapFromApi(await request(QUEUE_URL, path, { method: "PATCH" }, 12000));
   } catch {
     try {
-      return mapFromApi(await request(QUEUE_URL, path, { method: "POST" }, 90000));
+      return mapFromApi(await request(QUEUE_URL, path, { method: "POST" }, 12000));
     } catch {
-      return mapFromApi(await request(EVAL_URL, viaEval, { method: "PATCH" }, 90000));
+      return mapFromApi(await request(EVAL_URL, viaEval, { method: "PATCH" }, 12000));
     }
   }
 }
@@ -315,7 +315,19 @@ export async function markNotified(id, channel = "MANUAL") {
 }
 
 export async function fetchQueueHealth() {
-  return request(QUEUE_URL, "/api/v1/triage/health", {}, 20000);
+  return request(QUEUE_URL, "/api/v1/triage/health", {}, 8000);
+}
+
+/** Poke every Azure service so the next click is not a cold start. */
+export function warmupServices() {
+  const hit = (base, path) => (base ? request(base, path, {}, 8000).catch(() => null) : Promise.resolve(null));
+  return Promise.all([
+    hit(AUTH_URL, "/api/v1/health"),
+    hit(EVAL_URL, "/api/v1/triage/evaluations/health"),
+    hit(QUEUE_URL, "/api/v1/triage/health"),
+    hit(AI_URL, "/api/v1/ia/health"),
+    hit(AI_URL, "/api/v1/catalog/symptoms"),
+  ]);
 }
 
 /**
@@ -378,7 +390,7 @@ export async function intakeWithAi({ story, photo, known, comorbidityOptions }) 
       known,
       comorbidityOptions,
     }),
-  }, 90000);
+  }, 8000);
 }
 
 export async function explainField(field, value, context) {
@@ -389,7 +401,7 @@ export async function explainField(field, value, context) {
 }
 
 export async function fetchStats() {
-  return request(QUEUE_URL, "/api/v1/triage/stats");
+  return request(QUEUE_URL, "/api/v1/triage/stats", {}, 12000);
 }
 
 export async function fetchBoard() {
@@ -408,7 +420,7 @@ export async function saveSymptom(payload) {
   return request(AI_URL, "/api/v1/admin/symptoms", {
     method: "POST",
     body: JSON.stringify(payload),
-  });
+  }, 12000);
 }
 
 export async function fetchAdminUsers() {
@@ -423,7 +435,7 @@ export async function createUser(payload) {
   return request(AUTH_URL, "/api/v1/admin/users", {
     method: "POST",
     body: JSON.stringify(payload),
-  });
+  }, 12000);
 }
 
 export async function setUserActive(id, active) {

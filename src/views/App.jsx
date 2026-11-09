@@ -5,7 +5,7 @@ import { comparePriority, createPatient, documentAgeHint, documentDigits, docume
 import { explainWhy } from "../models/explain";
 import {
   analyzeTriage, createPatient as createPatientRecord, fetchPatients, fetchQueueHealth, fetchSymptoms, finishCare, login as loginRequest, markNotified,
-  saveEvaluation, reevaluatePatient, setPresence, startCare, subscribeEvents,
+  saveEvaluation, reevaluatePatient, setPresence, startCare, subscribeEvents, warmupServices,
 } from "../services/api";
 import { estimateWaitMinutes, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
@@ -205,10 +205,10 @@ export default function App() {
   useEffect(() => {
     const ping = () => {
       if (document.visibilityState !== "visible") return;
-      fetchQueueHealth().catch(() => {});
+      warmupServices();
     };
     ping();
-    const t = setInterval(ping, 150000);
+    const t = setInterval(ping, 45000);
     return () => clearInterval(t);
   }, []);
 
@@ -325,6 +325,7 @@ export default function App() {
     try {
       const session = await loginRequest({ username, password });
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      warmupServices();
       setUser(session);
     } catch (error) {
       setLoginError(error.message || "Usuario o contraseña incorrectos.");

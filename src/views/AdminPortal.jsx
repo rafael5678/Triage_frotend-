@@ -44,30 +44,41 @@ export default function AdminPortal({ user, onLogout }) {
     setTimeout(() => setToast(""), 4000);
   }
 
-  async function reload() {
+  async function loadSymptoms() {
     try {
-      const [s, u, p] = await Promise.all([
-        fetchAdminSymptoms(),
-        fetchAdminUsers(),
-        fetchPatients().catch(() => []),
-      ]);
-      setSymptoms(s);
-      setAccounts(u);
-      setPatients(p);
+      setSymptoms(await fetchAdminSymptoms());
+    } catch (error) {
+      flash(error.message);
+    }
+  }
+
+  async function loadUsers() {
+    try {
+      setAccounts(await fetchAdminUsers());
+    } catch (error) {
+      flash(error.message);
+    }
+  }
+
+  async function loadPatients() {
+    try {
+      setPatients(await fetchPatients());
     } catch (error) {
       flash(error.message);
     }
   }
 
   useEffect(() => {
-    reload();
-  }, []);
+    if (tab === "symptoms") loadSymptoms();
+    if (tab === "users") loadUsers();
+    if (tab === "patients") loadPatients();
+  }, [tab]);
 
   async function onSaveSymptom(event) {
     event.preventDefault();
     setBusy(true);
     try {
-      await saveSymptom({
+      const saved = await saveSymptom({
         id: symptomForm.id,
         label: symptomForm.label,
         hint: symptomForm.hint,
@@ -75,7 +86,7 @@ export default function AdminPortal({ user, onLogout }) {
         active: symptomForm.active !== false,
       });
       setSymptomForm(EMPTY_SYMPTOM);
-      await reload();
+      setSymptoms((rows) => [saved, ...rows.filter((row) => row.id !== saved.id)]);
       flash("Síntoma guardado.");
     } catch (error) {
       flash(error.message);
@@ -143,19 +154,19 @@ export default function AdminPortal({ user, onLogout }) {
           role: userForm.role,
         };
         if (password) payload.password = password;
-        await updateUser(editingId, payload);
+        const updated = await updateUser(editingId, payload);
         setEditingId(null);
         setOriginalPassword("");
         setShowPassword(false);
         setUserForm(EMPTY_USER);
-        await reload();
+        setAccounts((rows) => rows.map((row) => (row.id === editingId ? { ...row, ...updated } : row)));
         flash(self
           ? "Cuenta actualizada. Si cambió el usuario o la clave, entre de nuevo."
           : "Cuenta actualizada.");
       } else {
-        await createUser({ ...userForm, username, password });
+        const created = await createUser({ ...userForm, username, password });
         setUserForm(EMPTY_USER);
-        await reload();
+        setAccounts((rows) => [created, ...rows.filter((row) => row.id !== created.id)]);
         flash("Cuenta creada. Esa persona ya puede entrar con su usuario.");
       }
     } catch (error) {
@@ -169,13 +180,15 @@ export default function AdminPortal({ user, onLogout }) {
     const nextActive = account.active === false;
     setAccounts((rows) => rows.map((row) => (row.id === account.id ? { ...row, active: nextActive } : row)));
     try {
-      await setUserActive(account.id, nextActive);
-      await reload();
+      const saved = await setUserActive(account.id, nextActive);
+      if (saved) {
+        setAccounts((rows) => rows.map((row) => (row.id === account.id ? { ...row, ...saved, active: nextActive } : row)));
+      }
       flash(nextActive
         ? "Cuenta activada. Esa persona ya puede entrar."
         : "Cuenta desactivada. Esa persona ya no puede entrar.");
     } catch (error) {
-      await reload();
+      loadUsers();
       flash(error.message);
     }
   }
