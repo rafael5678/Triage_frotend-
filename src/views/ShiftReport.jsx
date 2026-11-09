@@ -1,3 +1,4 @@
+/** ShiftReport: staff UI module. User-facing copy stays in Spanish. */
 import { useEffect, useMemo, useState } from "react";
 import { LEVELS } from "../models/levels";
 import { waitInfo } from "../models/notice";
