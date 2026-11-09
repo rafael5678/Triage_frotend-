@@ -1,3 +1,4 @@
+/** dataset: staff UI module. User-facing copy stays in Spanish. */
 import { catalogEsiFloor, findSymptom } from "../models/catalog";
 import { COMORBIDITIES, CONDITIONS } from "./conditions";
 
