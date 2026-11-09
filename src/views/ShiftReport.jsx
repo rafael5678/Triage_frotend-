@@ -79,7 +79,7 @@ function csvCell(value) {
   return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/** Resumen del turno para la entrega de turno y el indicador de oportunidad en urgencias. */
+/** Resumen del shift para la entrega de shift y el indicador de oportunidad en urgencias. */
 export default function ShiftReport({ patients, conditionLabel, user }) {
   const [shiftId, setShiftId] = useState(currentShift());
   const [date, setDate] = useState(todayIso());
