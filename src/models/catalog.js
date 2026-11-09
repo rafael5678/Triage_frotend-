@@ -1,3 +1,4 @@
+/** catalog: staff UI module. User-facing copy stays in Spanish. */
 import { TRIAGE_BANDS, esiFloorFromSeverity } from "./triageBands";
 
 let liveSymptoms = [];
