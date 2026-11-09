@@ -1,3 +1,4 @@
+/** main: staff UI module. User-facing copy stays in Spanish. */
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./views/App.jsx";
