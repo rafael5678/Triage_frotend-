@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createUser, fetchAdminSymptoms, fetchAdminUser, fetchAdminUsers, fetchPatients, saveSymptom, setUserActive, updateUser } from "../services/api";
-import { comparePriority } from "../models/patient";
+import { comparePriority, matchesPatientSearch } from "../models/patient";
 import { loginFieldError, withoutSpaces, LOGIN_PASSWORD_MAX, PASSWORD_MIN, PASSWORD_MAX, USERNAME_MIN, USERNAME_MAX } from "../models/credentials";
 import { priorityFromScore } from "../ml/model";
 import StatsView from "./StatsView";
@@ -365,13 +365,7 @@ export default function AdminPortal({ user, onLogout }) {
                   <tr><th>Persona</th><th>Documento</th><th>Puntaje</th><th>Estado</th></tr>
                 </thead>
                 <tbody>
-                  {patients.filter((p) => {
-                    const q = query.trim().toLowerCase();
-                    if (!q) return true;
-                    const digits = q.replace(/\D/g, "");
-                    const doc = String(p.document || "").replace(/\D/g, "");
-                    return String(p.name || "").toLowerCase().includes(q) || (digits.length >= 3 && doc.includes(digits));
-                  }).sort(comparePriority).map((p) => (
+                  {patients.filter((p) => matchesPatientSearch(p, query)).sort(comparePriority).map((p) => (
                     <tr key={p.id}>
                       <td>{p.name}</td>
                       <td>{p.document}</td>

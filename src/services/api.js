@@ -409,7 +409,11 @@ export async function explainField(field, value, context) {
 }
 
 export async function fetchStats() {
-  return request(QUEUE_URL, "/api/v1/triage/stats", {}, 12000);
+  try {
+    return await request(EVAL_URL, "/api/v1/triage/evaluations/stats", {}, 8000);
+  } catch {
+    return request(QUEUE_URL, "/api/v1/triage/stats", {}, 8000);
+  }
 }
 
 export async function fetchBoard() {

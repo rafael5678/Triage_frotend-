@@ -27,8 +27,8 @@ export default function StatsView({ conditionLabel = (id) => id }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function load() {
-    setLoading(true);
+  async function load(silent = false) {
+    if (!silent) setLoading(true);
     setError("");
     try {
       setStats(await fetchStats());
@@ -40,11 +40,11 @@ export default function StatsView({ conditionLabel = (id) => id }) {
   }
 
   useEffect(() => {
-    load();
+    load(false);
     let timer;
     const stop = subscribeEvents(() => {
       clearTimeout(timer);
-      timer = setTimeout(load, 800);
+      timer = setTimeout(() => load(true), 4000);
     });
     return () => {
       stop();

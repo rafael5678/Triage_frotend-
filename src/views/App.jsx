@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COMORBIDITIES } from "../ml/conditions";
 import { getModel, predictScore } from "../ml/model";
-import { comparePriority, createPatient, documentAgeHint, documentDigits, documentError, isElderly, ticketCode } from "../models/patient";
+import { comparePriority, createPatient, documentAgeHint, documentDigits, documentError, isElderly, matchesPatientSearch, ticketCode } from "../models/patient";
 import { explainWhy } from "../models/explain";
 import {
   analyzeTriage, createPatient as createPatientRecord, fetchPatients, fetchQueueHealth, fetchSymptoms, finishCare, login as loginRequest, markNotified,
@@ -92,14 +92,7 @@ function Logo() {
 }
 
 function matchesSearch(patient, raw) {
-  const q = String(raw || "").trim().toLowerCase();
-  if (!q) return true;
-  const name = String(patient.name || "").toLowerCase();
-  const doc = String(patient.document || "").replace(/\D/g, "");
-  const digits = q.replace(/\D/g, "");
-  if (digits.length >= 3 && doc.includes(digits)) return true;
-  if (digits && digits === q && doc.endsWith(digits)) return true;
-  return name.includes(q);
+  return matchesPatientSearch(patient, raw);
 }
 
 function Chip({ priority }) {

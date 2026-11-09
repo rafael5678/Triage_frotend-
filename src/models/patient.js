@@ -15,6 +15,19 @@ export function documentDigits(raw) {
   return String(raw || "").replace(/\D/g, "").slice(0, 10);
 }
 
+export function matchesPatientSearch(patient, raw) {
+  const q = String(raw || "").trim().toLowerCase();
+  if (!q) return true;
+  const name = String(patient.name || "").toLowerCase();
+  const docRaw = String(patient.document || "").toLowerCase();
+  const doc = docRaw.replace(/\D/g, "");
+  const digits = q.replace(/\D/g, "");
+  if (name.includes(q)) return true;
+  if (docRaw.includes(q.replace(/\s/g, ""))) return true;
+  if (digits.length >= 1 && doc.includes(digits)) return true;
+  return false;
+}
+
 export function documentError(raw) {
   const digits = String(raw || "").replace(/\D/g, "");
   if (!digits) return "";
