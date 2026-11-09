@@ -15,6 +15,9 @@ function friendlyApiError(text) {
   if (/consciousness|conciencia/i.test(raw) && /match|pattern|regexp/i.test(raw)) {
     return "La conciencia debe ser A, C, V, P o U. Ya se corrige sola; intente confirmar otra vez.";
   }
+  if (/username already exists/i.test(raw)) {
+    return "Ese usuario ya existe.";
+  }
   if (/validation error/i.test(raw)) {
     return "Algún dato no pasó la validación. Revise cédula (5 a 10 números), pulso, oxígeno y presión, y confirme de nuevo.";
   }
@@ -418,4 +421,11 @@ export async function createUser(payload) {
 
 export async function setUserActive(id, active) {
   return request(AUTH_URL, `/api/v1/admin/users/${id}/active?active=${active}`, { method: "PATCH" });
+}
+
+export async function updateUser(id, payload) {
+  return request(AUTH_URL, `/api/v1/admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }

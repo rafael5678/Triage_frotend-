@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createUser, fetchAdminSymptoms, fetchAdminUsers, fetchPatients, saveSymptom, setUserActive } from "../services/api";
+import { createUser, fetchAdminSymptoms, fetchAdminUsers, fetchPatients, saveSymptom, setUserActive, updateUser } from "../services/api";
 import { comparePriority } from "../models/patient";
 import { loginFieldError, withoutSpaces, PASSWORD_MIN, PASSWORD_MAX, USERNAME_MIN, USERNAME_MAX } from "../models/credentials";
 import { priorityFromScore } from "../ml/model";
@@ -31,6 +31,7 @@ export default function AdminPortal({ user, onLogout }) {
   const [patients, setPatients] = useState([]);
   const [symptomForm, setSymptomForm] = useState(EMPTY_SYMPTOM);
   const [userForm, setUserForm] = useState(EMPTY_USER);
+  const [editingId, setEditingId] = useState(null);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
@@ -81,21 +82,57 @@ export default function AdminPortal({ user, onLogout }) {
     }
   }
 
+  function startEdit(account) {
+    setEditingId(account.id);
+    setUserForm({
+      username: account.username || "",
+      password: "",
+      displayName: account.displayName || "",
+      role: account.role || "STAFF",
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setUserForm(EMPTY_USER);
+  }
+
   async function onCreateUser(event) {
     event.preventDefault();
     const username = withoutSpaces(userForm.username);
     const password = withoutSpaces(userForm.password);
-    const invalid = loginFieldError(username, password);
+    const invalid = loginFieldError(username, password, { passwordRequired: !editingId });
     if (invalid) {
       flash(invalid);
       return;
     }
+    if (!userForm.displayName?.trim()) {
+      flash("Falta el nombre para mostrar.");
+      return;
+    }
     setBusy(true);
     try {
-      await createUser({ ...userForm, username, password });
-      setUserForm(EMPTY_USER);
-      await reload();
-      flash("Cuenta creada. Esa persona ya puede entrar con su usuario.");
+      if (editingId) {
+        const self = editingId === user.id;
+        const payload = {
+          username,
+          displayName: userForm.displayName.trim(),
+          role: userForm.role,
+        };
+        if (password) payload.password = password;
+        await updateUser(editingId, payload);
+        setEditingId(null);
+        setUserForm(EMPTY_USER);
+        await reload();
+        flash(self
+          ? "Cuenta actualizada. Si cambió el usuario o la clave, entre de nuevo."
+          : "Cuenta actualizada.");
+      } else {
+        await createUser({ ...userForm, username, password });
+        setUserForm(EMPTY_USER);
+        await reload();
+        flash("Cuenta creada. Esa persona ya puede entrar con su usuario.");
+      }
     } catch (error) {
       flash(error.message);
     } finally {
@@ -208,7 +245,7 @@ export default function AdminPortal({ user, onLogout }) {
         {tab === "users" && (
           <section className="page">
             <h1>Quién puede usar la aplicación</h1>
-            <p className="sub">Cree cuentas de personal (sala de urgencias) o de administrador. No hay usuarios fijos en el código: todo sale de la base.</p>
+            <p className="sub">Cree o edite cuentas de personal y de administrador: nombre, usuario y contraseña. Todo sale de la base.</p>
             <form className="sheet" onSubmit={onCreateUser}>
               <div className="g2">
                 <label>Nombre para mostrar
@@ -219,8 +256,8 @@ export default function AdminPortal({ user, onLogout }) {
                   <small className="hint">{USERNAME_MIN} a {USERNAME_MAX} caracteres, sin espacios</small>
                 </label>
                 <label>Contraseña
-                  <input required type="password" autoComplete="new-password" maxLength={PASSWORD_MAX} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: withoutSpaces(e.target.value) })} />
-                  <small className="hint">{PASSWORD_MIN} a {PASSWORD_MAX} caracteres, sin espacios</small>
+                  <input required={!editingId} type="password" autoComplete="new-password" maxLength={PASSWORD_MAX} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: withoutSpaces(e.target.value) })} />
+                  <small className="hint">{editingId ? "Déjela vacía para no cambiarla. " : ""}{PASSWORD_MIN} a {PASSWORD_MAX} caracteres, sin espacios</small>
                 </label>
                 <label>Módulo
                   <select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}>
@@ -229,7 +266,10 @@ export default function AdminPortal({ user, onLogout }) {
                   </select>
                 </label>
               </div>
-              <button className="btn" disabled={busy} type="submit">Crear cuenta</button>
+              <div className="row-btns">
+                <button className="btn" disabled={busy} type="submit">{editingId ? "Guardar cambios" : "Crear cuenta"}</button>
+                {editingId && <button className="ghost" type="button" onClick={cancelEdit}>Cancelar</button>}
+              </div>
             </form>
             <div className="sheet table-wrap" style={{ marginTop: 16 }}>
               <table>
@@ -243,6 +283,7 @@ export default function AdminPortal({ user, onLogout }) {
                       <td>{a.username}</td>
                       <td>{a.role === "ADMIN" ? "Administrador" : "Urgencias"}</td>
                       <td>
+                        <button className="text" type="button" onClick={() => startEdit(a)}>Editar</button>
                         {a.id !== user.id && (
                           <button className="text" type="button" onClick={() => toggleActive(a)}>
                             {a.active === false ? "Activar" : "Desactivar"}

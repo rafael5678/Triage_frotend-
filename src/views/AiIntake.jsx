@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { intakeWithAi } from "../services/api";
 import { resizePhoto } from "../models/photo";
 import { VITAL_LABELS } from "../models/levels";
@@ -12,44 +12,13 @@ function isEmpty(value) {
   return value === "" || value === null || value === undefined;
 }
 
-function speechRecognition() {
-  return typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
-}
-
 /**
- * Caja "Contar lo que pasa": relato escrito o dictado y foto opcional.
- * La IA llena solo lo que está vacío; los signos que estima quedan marcados para medirlos.
+ * Relato escrito y foto opcional para armar el ingreso.
  */
 export default function AiIntake({ form, onApply, comorbidities, flash }) {
   const story = form.story || "";
   const [busy, setBusy] = useState(false);
-  const [listening, setListening] = useState(false);
   const [notes, setNotes] = useState(null);
-  const recognizer = useRef(null);
-  const canDictate = Boolean(speechRecognition());
-
-  useEffect(() => () => recognizer.current?.stop(), []);
-
-  function toggleDictation() {
-    if (listening) {
-      recognizer.current?.stop();
-      return;
-    }
-    const Recognition = speechRecognition();
-    const rec = new Recognition();
-    rec.lang = "es-CO";
-    rec.interimResults = false;
-    rec.continuous = true;
-    rec.onresult = (event) => {
-      const text = Array.from(event.results).slice(event.resultIndex).map((r) => r[0].transcript).join(" ");
-      onApply((current) => ({ story: `${current.story || ""} ${text}`.trim() }));
-    };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    recognizer.current = rec;
-    rec.start();
-    setListening(true);
-  }
 
   async function onPhoto(event) {
     const file = event.target.files?.[0];
@@ -64,7 +33,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
 
   async function fill() {
     if (!story.trim() && !form.photo) {
-      flash("Escriba o dicte qué le pasa, o adjunte una foto.");
+      flash("Escriba qué le pasa, o adjunte una foto.");
       return;
     }
     setBusy(true);
@@ -127,7 +96,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
     <div className="ai-intake">
       <div className="ai-intake-head">
         <h3><span className="step-num">1</span> ¿Qué está pasando?</h3>
-        <p className="sub">Díctelo o escríbalo. El relato, los signos y la foto (si hay) sirven para armar el caso. No hace falta escribir la causa: la evaluación la interpreta.</p>
+        <p className="sub">Escríbalo. El relato, los signos y la foto (si hay) sirven para armar el caso. No hace falta escribir la causa: la evaluación la interpreta.</p>
       </div>
       <textarea
         rows="3"
@@ -136,11 +105,6 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
         onChange={(e) => onApply({ story: e.target.value })}
       />
       <div className="ai-intake-actions">
-        {canDictate && (
-          <button type="button" className={listening ? "ghost rec" : "ghost"} onClick={toggleDictation}>
-            {listening ? "Detener dictado" : "Dictar con la voz"}
-          </button>
-        )}
         <label className="ghost file-btn">
           {form.photo ? "Cambiar foto" : "Adjuntar o tomar foto"}
           <input type="file" accept="image/*" capture="environment" onChange={onPhoto} hidden />
