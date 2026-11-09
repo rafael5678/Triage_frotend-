@@ -1,3 +1,4 @@
+/** Recommendations: staff UI module. User-facing copy stays in Spanish. */
 import { VITAL_LABELS } from "../models/levels";
 import { readVitals } from "../models/vitals";
 
