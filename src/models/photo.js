@@ -1,3 +1,4 @@
+/* English: identifiers in this file are English; on-screen copy stays Spanish. */
 /** Reduce la foto a máx. 1280 px y JPEG para que la IA la lea bien sin saturar la red. */
 export function resizePhoto(file, maxSide = 1280, quality = 0.85) {
   return new Promise((resolve, reject) => {
@@ -23,3 +24,4 @@ export function resizePhoto(file, maxSide = 1280, quality = 0.85) {
     reader.readAsDataURL(file);
   });
 }
+
