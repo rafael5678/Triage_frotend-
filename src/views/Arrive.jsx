@@ -1,3 +1,4 @@
+/** Arrive: staff UI module. User-facing copy stays in Spanish. */
 import { useEffect, useState } from "react";
 import { setPresence } from "../services/api";
 import { ticketCode } from "../models/patient";
