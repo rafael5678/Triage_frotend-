@@ -9,7 +9,7 @@ function patientIdFromLocation() {
   return hash ? hash[1] : "";
 }
 
-/** Página que abre el paciente desde WhatsApp: un toque y el personal ve que ya está en sala. */
+/** Página que abre el patient from WhatsApp: un toque y el personal ve que ya está en room. */
 export default function Arrive() {
   const id = patientIdFromLocation();
   const [status, setStatus] = useState(id ? "ready" : "bad");
