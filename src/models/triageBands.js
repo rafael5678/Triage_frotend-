@@ -1,3 +1,4 @@
+/* English: identifiers in this file are English; on-screen copy stays Spanish. */
 /** Shared ESI bands. Keep in sync with backend TriageBands. */
 export const TRIAGE_BANDS = {
   ESI_I: 78,
@@ -18,3 +19,4 @@ export function esiFloorFromSeverity(severity) {
   if (n >= TRIAGE_BANDS.ESI_III) return TRIAGE_BANDS.ESI_III;
   return TRIAGE_BANDS.MIN;
 }
+
