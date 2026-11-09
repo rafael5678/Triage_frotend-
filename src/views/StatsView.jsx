@@ -1,3 +1,4 @@
+/** StatsView: staff UI module. User-facing copy stays in Spanish. */
 import { useEffect, useState } from "react";
 import { fetchPatients } from "../services/api";
 import { LEVELS } from "../models/levels";
