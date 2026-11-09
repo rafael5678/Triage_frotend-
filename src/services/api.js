@@ -1,5 +1,5 @@
 import { priorityFromScore } from "../ml/model";
-import { findSymptom, newestFirst } from "../models/catalog";
+import { findSymptom } from "../models/catalog";
 
 function friendlyApiError(text) {
   const raw = String(text || "");
@@ -417,11 +417,11 @@ export async function fetchBoard() {
 }
 
 export async function fetchSymptoms() {
-  return newestFirst(await request(AI_URL, "/api/v1/catalog/symptoms"));
+  return request(AI_URL, "/api/v1/catalog/symptoms");
 }
 
 export async function fetchAdminSymptoms() {
-  return newestFirst(await request(AI_URL, "/api/v1/admin/symptoms"));
+  return request(AI_URL, "/api/v1/admin/symptoms");
 }
 
 export async function saveSymptom(payload) {

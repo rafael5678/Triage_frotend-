@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { createUser, fetchAdminSymptoms, fetchAdminUser, fetchAdminUsers, fetchPatients, saveSymptom, setUserActive, updateUser } from "../services/api";
 import { comparePriority } from "../models/patient";
-import { newestFirst, rememberNewSymptom } from "../models/catalog";
 import { loginFieldError, withoutSpaces, LOGIN_PASSWORD_MAX, PASSWORD_MIN, PASSWORD_MAX, USERNAME_MIN, USERNAME_MAX } from "../models/credentials";
 import { priorityFromScore } from "../ml/model";
 import StatsView from "./StatsView";
@@ -87,8 +86,10 @@ export default function AdminPortal({ user, onLogout }) {
         active: symptomForm.active !== false,
       });
       setSymptomForm(EMPTY_SYMPTOM);
-      if (!symptomForm.id) rememberNewSymptom(saved.id);
-      setSymptoms((rows) => newestFirst([saved, ...rows.filter((row) => row.id !== saved.id)]));
+      setSymptoms((rows) => {
+        const next = [saved, ...rows.filter((row) => row.id !== saved.id)];
+        return next.sort((a, b) => (Number(b.severity) || 0) - (Number(a.severity) || 0));
+      });
       flash("Síntoma guardado.");
     } catch (error) {
       flash(error.message);
