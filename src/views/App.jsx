@@ -38,6 +38,17 @@ function writePendingQueue(map) {
   sessionStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify([...map.values()]));
 }
 
+function openWhatsAppTurn(url) {
+  if (!url) return;
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 const NAV = [
   ["queue", "Sala de espera"],
   ["intake", "Ingreso"],
@@ -171,6 +182,19 @@ export default function App() {
   const confirmedCareRef = useRef(new Set());
   const pendingQueueRef = useRef(new Map());
   const holdReloadsUntil = useRef(0);
+  const careLockRef = useRef(new Set());
+
+  function careKey(id, document) {
+    return [`id:${String(id || "")}`, document ? `doc:${String(document)}` : null].filter(Boolean);
+  }
+
+  function lockCare(id, document) {
+    for (const key of careKey(id, document)) careLockRef.current.add(key);
+  }
+
+  function isCareLocked(id, document) {
+    return careKey(id, document).some((key) => careLockRef.current.has(key));
+  }
 
   function rememberPending(patient) {
     if (!patient?.id) return;
@@ -206,7 +230,9 @@ export default function App() {
       const inCare = p.status === "En atención" || p.statusCode === "EN_ATENCION"
         || p.status === "Atendido" || p.statusCode === "ATENDIDO"
         || p.status === "Cancelado" || p.statusCode === "CANCELADO";
-      const hold = passingRef.current.has(p.id) || confirmedCareRef.current.has(p.id);
+      const hold = passingRef.current.has(p.id) || passingRef.current.has(String(p.id))
+        || confirmedCareRef.current.has(p.id) || confirmedCareRef.current.has(String(p.id))
+        || isCareLocked(p.id, p.document);
       if (hold && !inCare) {
         p = { ...p, status: "En atención", statusCode: "EN_ATENCION", careStartedAt: p.careStartedAt || Date.now() };
       }
@@ -229,7 +255,11 @@ export default function App() {
       }
       return { ...p, ...hit, id: p.id, status: "En espera", statusCode: "EN_ESPERA" };
     });
-    const extra = pending.filter((q) => !used.has(q) && !mapped.some((p) => String(p.id) === String(q.id)));
+    const extra = pending.filter((q) =>
+      !used.has(q)
+      && !isCareLocked(q.id, q.document)
+      && !mapped.some((p) => String(p.id) === String(q.id))
+    );
     return extra.length ? [...extra, ...mapped].sort(comparePriority) : mapped;
   }
 
@@ -525,10 +555,12 @@ export default function App() {
     setForm(EMPTY_FORM);
     const ticket = saved.ticket || ticketCode(saved);
     const place = nextList.filter((p) => p.status === "En espera").findIndex((p) => p.id === saved.id) + 1;
-    flash(`${saved.name} quedó en la cola · turno ${ticket} · puesto ${place || 1}. Aviso de WhatsApp: toque el nombre.`);
+    flash(`${saved.name} quedó en la cola · turno ${ticket} · puesto ${place || 1}.`);
     setView("queue");
     setResult(null);
     setConfirmBusy(false);
+    const waLink = isValidWhatsApp(saved.phone) ? whatsappLink(saved, place || 1, Date.now()) : "";
+    if (waLink) openWhatsAppTurn(waLink);
     void persistAdmission(payload, tempId, saved);
   }
 
@@ -538,11 +570,26 @@ export default function App() {
       try {
         const created = await createPatientRecord(payload);
         const patientId = created.patientId;
-        forgetPending(tempId);
+        forgetPending(tempId, saved.document);
+        if (isCareLocked(tempId, saved.document) || isCareLocked(patientId, saved.document)) {
+          lockCare(patientId, saved.document);
+          forgetPending(patientId, saved.document);
+          try { await saveEvaluation({ ...payload, newVisit: true }, patientId); } catch { /* already in care */ }
+          return;
+        }
         const withId = { ...saved, id: patientId, status: "En espera", statusCode: "EN_ESPERA" };
         rememberPending(withId);
-        setPatients((list) => [{ ...withId }, ...list.filter((p) => p.id !== tempId && p.id !== patientId)].sort(comparePriority));
+        setPatients((list) => {
+          if (list.some((p) => (p.id === patientId || p.id === tempId) && (p.status === "En atención" || p.statusCode === "EN_ATENCION"))) {
+            return list.map((p) => (p.id === tempId ? { ...p, id: patientId } : p));
+          }
+          return [{ ...withId }, ...list.filter((p) => p.id !== tempId && p.id !== patientId)].sort(comparePriority);
+        });
         const scored = await saveEvaluation({ ...payload, newVisit: true }, patientId);
+        if (isCareLocked(patientId, saved.document)) {
+          forgetPending(patientId, saved.document);
+          return;
+        }
         const kept = {
           ...withId,
           ...scored,
@@ -551,7 +598,12 @@ export default function App() {
           statusCode: "EN_ESPERA",
         };
         rememberPending(kept);
-        setPatients((list) => [kept, ...list.filter((p) => p.id !== patientId && p.id !== tempId)].sort(comparePriority));
+        setPatients((list) => {
+          if (list.some((p) => p.id === patientId && (p.status === "En atención" || p.statusCode === "EN_ATENCION"))) {
+            return list;
+          }
+          return [kept, ...list.filter((p) => p.id !== patientId && p.id !== tempId)].sort(comparePriority);
+        });
         return;
       } catch (error) {
         lastError = error;
@@ -574,6 +626,7 @@ export default function App() {
     }
     const previous = patients.find((p) => p.id === id);
     forgetPending(id, previous?.document);
+    lockCare(id, previous?.document);
     setPassing(id, true);
     confirmedCareRef.current.add(id);
     replacePatient({
@@ -585,13 +638,12 @@ export default function App() {
     setSelected((current) => (current?.id === id ? null : current));
     try {
       const updated = await startCare(id);
+      lockCare(updated.id || id, updated.document || previous?.document);
       replacePatient({ ...updated, status: "En atención", statusCode: "EN_ATENCION" });
       const minutes = updated.careStartedAt ? Math.round((updated.careStartedAt - updated.arrivedAt) / 60000) : null;
       flash(`Pasa a atención${minutes != null ? ` después de ${minutesLabel(minutes)} de espera` : ""}.`);
     } catch (error) {
-      confirmedCareRef.current.delete(id);
-      if (previous) replacePatient(previous);
-      flash(error.message || "No se pudo pasar a atención. Intente de nuevo.");
+      flash(`Quedó en atención en pantalla. El servidor aún confirma: ${error.message || "sin respuesta"}.`);
     } finally {
       setPassing(id, false);
     }
@@ -623,7 +675,7 @@ export default function App() {
       flash("Este paciente no tiene celular registrado.");
       return;
     }
-    window.open(link, "_blank", "noopener");
+    openWhatsAppTurn(link);
     try {
       replacePatient(await markNotified(patient.id, "MANUAL"));
     } catch (error) {
@@ -912,7 +964,7 @@ export default function App() {
                 <Field className="full" label="WhatsApp (celular colombiano)">
                   <input type="tel" inputMode="numeric" maxLength={10} placeholder="3001234567" value={form.phone} onChange={(e) => setField("phone", String(e.target.value || "").replace(/\D/g, "").slice(0, 10))} />
                   <small className={phoneError(form.phone) ? "vital-live bad" : "hint"}>
-                    {phoneError(form.phone) || "Solo un celular real de Colombia (10 dígitos, empieza en 3). Después de confirmar, toque el nombre en la cola para WhatsApp."}
+                    {phoneError(form.phone) || "Solo un celular real de Colombia (10 dígitos, empieza en 3). Al confirmar se abre WhatsApp con el turno."}
                   </small>
                 </Field>
                 <Field label="Edad">
@@ -1077,14 +1129,14 @@ export default function App() {
             </div>
             <div className="sheet wa-box">
               <h3>Avisar el turno por WhatsApp</h3>
-              <p className="muted">Celular colombiano real. Al confirmar queda en la cola; después toque el nombre para abrir WhatsApp con el turno {result.ticket || ticketCode(result)}.</p>
+              <p className="muted">Celular colombiano real. Al confirmar queda en la cola y se abre WhatsApp con el turno {result.ticket || ticketCode(result)}, el puesto y el área.</p>
               <Field label="Celular">
                 <input type="tel" inputMode="numeric" maxLength={10} placeholder="3186680042" value={result.phone || ""} onChange={(e) => {
                   setConfirmError("");
                   setResult({ ...result, phone: String(e.target.value || "").replace(/\D/g, "").slice(0, 10) });
                 }} />
               </Field>
-              {isValidWhatsApp(result.phone) && <p className="hint">Este celular sí sirve. Confirmar no sale de la sala; el aviso de WhatsApp se abre cuando toque el nombre.</p>}
+              {isValidWhatsApp(result.phone) && <p className="hint">Este celular sí sirve. Al confirmar se abre WhatsApp con el turno, sin quitar a la persona de la sala.</p>}
               {phoneError(result.phone) && <p className="form-err">{phoneError(result.phone)}</p>}
               {!String(result.phone || "").trim() && <p className="warn-line">Sin un celular válido no le llega el mensaje. Puede confirmar igual y avisar después.</p>}
             </div>
