@@ -155,6 +155,7 @@ export default function App() {
   const reloadTimer = useRef(null);
   const passingRef = useRef(new Set());
   const confirmedCareRef = useRef(new Set());
+  const pendingQueueRef = useRef(new Map());
 
   function isPassing(id) {
     return passingIds.includes(id);
@@ -167,7 +168,7 @@ export default function App() {
   }
 
   function mergeServerList(list) {
-    return (list || []).map((p) => {
+    const mapped = (list || []).map((p) => {
       const hold = passingRef.current.has(p.id) || confirmedCareRef.current.has(p.id);
       if (!hold) return p;
       const inCare = p.status === "En atención" || p.statusCode === "EN_ATENCION";
@@ -178,6 +179,17 @@ export default function App() {
       if (passingRef.current.has(p.id)) return p;
       return { ...p, status: "En atención", statusCode: "EN_ATENCION", careStartedAt: p.careStartedAt || Date.now() };
     });
+    const ids = new Set(mapped.map((p) => String(p.id)));
+    const docs = new Set(mapped.map((p) => String(p.document || "")).filter(Boolean));
+    const extra = [];
+    for (const [key, pending] of pendingQueueRef.current.entries()) {
+      if (ids.has(String(pending.id)) || (pending.document && docs.has(String(pending.document)))) {
+        pendingQueueRef.current.delete(key);
+        continue;
+      }
+      extra.push(pending);
+    }
+    return extra.length ? [...extra, ...mapped].sort(comparePriority) : mapped;
   }
 
   const waiting = useMemo(
@@ -430,62 +442,68 @@ export default function App() {
     }
     setConfirmBusy(true);
     setConfirmError("");
+    const snapshot = result;
+    const payload = {
+      ...result,
+      ...toPayload(form.name ? form : result),
+      name: (result.name || form.name || "").trim(),
+      document: documentDigits(result.document || form.document),
+      phone: result.phone || form.phone,
+      sex: form.sex || result.sex,
+      age: Number(form.age || result.age),
+      pregnant: (form.sex || result.sex) === "F" && Boolean(form.pregnant || result.pregnant),
+      gestationWeeks: form.gestationWeeks || result.gestationWeeks,
+      conditionId: form.conditionId || result.conditionId,
+      comorbidityIds: form.comorbidityIds?.length ? form.comorbidityIds : result.comorbidityIds,
+      photo: null,
+      photoBase64: null,
+    };
+    const tempId = `local-${Date.now()}`;
+    const saved = {
+      ...result,
+      ...payload,
+      id: tempId,
+      status: "En espera",
+      statusCode: "EN_ESPERA",
+      arrivedAt: result.arrivedAt || Date.now(),
+      evaluatedAt: result.evaluatedAt || Date.now(),
+      ticket: result.ticket || ticketCode(payload),
+    };
+    saved.explanation = explainWhy(saved);
+    pendingQueueRef.current.set(tempId, saved);
+    const nextList = [saved, ...patients.filter((p) => p.id !== saved.id)].sort(comparePriority);
+    setPatients(nextList);
+    setForm(EMPTY_FORM);
+    const ticket = saved.ticket || ticketCode(saved);
+    const place = nextList.filter((p) => p.status === "En espera").findIndex((p) => p.id === saved.id) + 1;
+    flash(`${saved.name} quedó en la cola · turno ${ticket} · puesto ${place || 1}.`);
+    setView("queue");
+    setResult(null);
+    setConfirmBusy(false);
+    const link = isValidWhatsApp(saved.phone) ? whatsappLink(saved, place || 1, Date.now()) : "";
+    if (link) {
+      window.setTimeout(() => window.open(link, "_blank", "noopener"), 400);
+    }
     try {
-      const payload = {
-        ...result,
-        ...toPayload(form.name ? form : result),
-        name: (result.name || form.name || "").trim(),
-        document: documentDigits(result.document || form.document),
-        phone: result.phone || form.phone,
-        sex: form.sex || result.sex,
-        age: Number(form.age || result.age),
-        pregnant: (form.sex || result.sex) === "F" && Boolean(form.pregnant || result.pregnant),
-        gestationWeeks: form.gestationWeeks || result.gestationWeeks,
-        conditionId: form.conditionId || result.conditionId,
-        comorbidityIds: form.comorbidityIds?.length ? form.comorbidityIds : result.comorbidityIds,
-        photo: null,
-        photoBase64: null,
-      };
       const created = await createPatientRecord(payload);
       const patientId = created.patientId;
-      const saved = {
-        ...result,
-        id: patientId,
-        status: result.status || "En espera",
-        statusCode: result.statusCode || "EN_ESPERA",
-        immediateActions: result.immediateActions,
-        testsToOrder: result.testsToOrder,
-        monitoring: result.monitoring,
-        redFlags: result.redFlags,
-        geminiReasons: result.geminiReasons,
-        datasetReasons: result.datasetReasons,
-        iaActive: result.iaActive,
-        photoFindings: result.photoFindings,
-        symptomExplanation: result.symptomExplanation,
-      };
-      saved.explanation = explainWhy(saved);
-      const nextList = [saved, ...patients.filter((p) => p.id !== saved.id)].sort(comparePriority);
-      setPatients(nextList);
-      setForm(EMPTY_FORM);
-      const ticket = saved.ticket || ticketCode(saved);
-      const place = nextList.filter((p) => p.status === "En espera").findIndex((p) => p.id === saved.id) + 1;
-      flash(`${saved.name} quedó en la cola · turno ${ticket} · puesto ${place || 1}.`);
-      setView("queue");
-      setResult(null);
-      if (isValidWhatsApp(saved.phone)) {
-        const link = whatsappLink(saved, place || 1, Date.now());
-        if (link) window.open(link, "_blank", "noopener");
-      }
+      pendingQueueRef.current.delete(tempId);
+      const withId = { ...saved, id: patientId };
+      pendingQueueRef.current.set(String(patientId), withId);
+      setPatients((list) => [{ ...withId }, ...list.filter((p) => p.id !== tempId && p.id !== patientId)].sort(comparePriority));
       saveEvaluation(payload, patientId)
         .then((scored) => {
-          setPatients((list) => [ { ...saved, ...scored }, ...list.filter((p) => p.id !== patientId) ].sort(comparePriority));
+          pendingQueueRef.current.delete(String(patientId));
+          setPatients((list) => [{ ...withId, ...scored }, ...list.filter((p) => p.id !== patientId)].sort(comparePriority));
         })
         .catch((err) => flash(`Quedó en la sala; el puntaje se está guardando: ${err.message}`));
     } catch (error) {
+      pendingQueueRef.current.delete(tempId);
+      setPatients((list) => list.filter((p) => p.id !== tempId));
+      setResult(snapshot);
+      setView("result");
       setConfirmError(error.message || "No se pudo guardar en la cola.");
       flash(`No se guardó en la cola: ${error.message}`);
-    } finally {
-      setConfirmBusy(false);
     }
   }
 
