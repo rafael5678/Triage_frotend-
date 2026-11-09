@@ -1,3 +1,4 @@
+/** App: staff UI module. User-facing copy stays in Spanish. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COMORBIDITIES } from "../ml/conditions";
 import { getModel, predictScore } from "../ml/model";
