@@ -5,7 +5,7 @@ import { comparePriority, createPatient, documentAgeHint, documentDigits, docume
 import { explainWhy } from "../models/explain";
 import {
   analyzeTriage, createPatient as createPatientRecord, fetchPatients, fetchQueueHealth, fetchSymptoms, finishCare, login as loginRequest, markNotified,
-  readCachedPatients, saveEvaluation, reevaluatePatient, setPresence, startCare, subscribeEvents, warmupServices,
+  saveEvaluation, reevaluatePatient, setPresence, startCare, subscribeEvents, warmupServices,
 } from "../services/api";
 import { estimateWaitMinutes, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
@@ -147,8 +147,8 @@ export default function App() {
   const [catalog, setCatalog] = useState([]);
   const [view, setView] = useState("queue");
   const [form, setForm] = useState(EMPTY_FORM);
-  const [patients, setPatients] = useState(() => readCachedPatients() || []);
-  const [queueLoading, setQueueLoading] = useState(() => !readCachedPatients());
+  const [patients, setPatients] = useState([]);
+  const [queueLoading, setQueueLoading] = useState(true);
   const [result, setResult] = useState(null);
   const [selected, setSelected] = useState(null);
   const [toast, setToast] = useState("");
@@ -331,13 +331,7 @@ export default function App() {
       const queuePromise = fetchPatients().catch(() => null);
       const session = await loginRequest({ username, password });
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      const cached = readCachedPatients();
-      if (cached?.length) {
-        setPatients(cached);
-        setQueueLoading(false);
-      } else {
-        setQueueLoading(true);
-      }
+      setQueueLoading(true);
       setUser(session);
       queuePromise.then((list) => {
         if (list) {
@@ -356,8 +350,8 @@ export default function App() {
   function logout() {
     sessionStorage.removeItem(SESSION_KEY);
     setUser(null);
-    setPatients(readCachedPatients() || []);
-    setQueueLoading(!readCachedPatients());
+    setPatients([]);
+    setQueueLoading(true);
     setCatalog([]);
     setSymptomCatalog([]);
     setQuery("");

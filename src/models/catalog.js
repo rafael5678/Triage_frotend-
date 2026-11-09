@@ -1,9 +1,47 @@
 import { TRIAGE_BANDS, esiFloorFromSeverity } from "./triageBands";
 
 let liveSymptoms = [];
+const NEWEST_KEY = "triage.newestSymptomIds";
+
+function newestIds() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(NEWEST_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function rememberNewSymptom(id) {
+  if (!id) return;
+  const next = [id, ...newestIds().filter((item) => item !== id)].slice(0, 80);
+  try {
+    sessionStorage.setItem(NEWEST_KEY, JSON.stringify(next));
+  } catch {
+    /* quota */
+  }
+}
+
+export function newestFirst(rows) {
+  const ids = newestIds();
+  return [...(rows || [])]
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const ai = ids.indexOf(a.row.id);
+      const bi = ids.indexOf(b.row.id);
+      const ap = ai === -1 ? Number.MAX_SAFE_INTEGER : ai;
+      const bp = bi === -1 ? Number.MAX_SAFE_INTEGER : bi;
+      if (ap !== bp) return ap - bp;
+      const ta = Date.parse(a.row.createdAt) || 0;
+      const tb = Date.parse(b.row.createdAt) || 0;
+      if (tb !== ta) return tb - ta;
+      return a.index - b.index;
+    })
+    .map((item) => item.row);
+}
 
 export function setSymptomCatalog(rows) {
-  liveSymptoms = Array.isArray(rows) ? rows : [];
+  liveSymptoms = newestFirst(Array.isArray(rows) ? rows : []);
 }
 
 export function symptomCatalog() {

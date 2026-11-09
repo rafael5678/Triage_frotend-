@@ -1,5 +1,5 @@
 import { priorityFromScore } from "../ml/model";
-import { findSymptom } from "../models/catalog";
+import { findSymptom, newestFirst } from "../models/catalog";
 
 function friendlyApiError(text) {
   const raw = String(text || "");
@@ -182,34 +182,12 @@ function uniqueByPatient(rows) {
   return Array.from(latest.values());
 }
 
-const QUEUE_CACHE_KEY = "triage.queue.cache";
 let patientsInflight = null;
-
-export function readCachedPatients() {
-  try {
-    const raw = sessionStorage.getItem(QUEUE_CACHE_KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data?.patients) || Date.now() - Number(data.at || 0) > 20 * 60 * 1000) return null;
-    return data.patients;
-  } catch {
-    return null;
-  }
-}
-
-function rememberPatients(list) {
-  try {
-    sessionStorage.setItem(QUEUE_CACHE_KEY, JSON.stringify({ at: Date.now(), patients: list }));
-  } catch {
-    /* quota */
-  }
-  return list;
-}
 
 export async function fetchPatients() {
   if (patientsInflight) return patientsInflight;
   patientsInflight = request(QUEUE_URL, "/api/v1/triage/patients", {}, 25000)
-    .then((rows) => rememberPatients(uniqueByPatient((rows || []).map(mapFromApi))))
+    .then((rows) => uniqueByPatient((rows || []).map(mapFromApi)))
     .finally(() => {
       patientsInflight = null;
     });
@@ -439,11 +417,11 @@ export async function fetchBoard() {
 }
 
 export async function fetchSymptoms() {
-  return request(AI_URL, "/api/v1/catalog/symptoms");
+  return newestFirst(await request(AI_URL, "/api/v1/catalog/symptoms"));
 }
 
 export async function fetchAdminSymptoms() {
-  return request(AI_URL, "/api/v1/admin/symptoms");
+  return newestFirst(await request(AI_URL, "/api/v1/admin/symptoms"));
 }
 
 export async function saveSymptom(payload) {
