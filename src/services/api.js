@@ -182,9 +182,38 @@ function uniqueByPatient(rows) {
   return Array.from(latest.values());
 }
 
+const QUEUE_CACHE_KEY = "triage.queue.cache";
+let patientsInflight = null;
+
+export function readCachedPatients() {
+  try {
+    const raw = sessionStorage.getItem(QUEUE_CACHE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data?.patients) || Date.now() - Number(data.at || 0) > 20 * 60 * 1000) return null;
+    return data.patients;
+  } catch {
+    return null;
+  }
+}
+
+function rememberPatients(list) {
+  try {
+    sessionStorage.setItem(QUEUE_CACHE_KEY, JSON.stringify({ at: Date.now(), patients: list }));
+  } catch {
+    /* quota */
+  }
+  return list;
+}
+
 export async function fetchPatients() {
-  const rows = await request(QUEUE_URL, "/api/v1/triage/patients");
-  return uniqueByPatient((rows || []).map(mapFromApi));
+  if (patientsInflight) return patientsInflight;
+  patientsInflight = request(QUEUE_URL, "/api/v1/triage/patients", {}, 25000)
+    .then((rows) => rememberPatients(uniqueByPatient((rows || []).map(mapFromApi))))
+    .finally(() => {
+      patientsInflight = null;
+    });
+  return patientsInflight;
 }
 
 function intakeBody(form) {
@@ -327,6 +356,7 @@ export function warmupServices() {
     hit(QUEUE_URL, "/api/v1/triage/health"),
     hit(AI_URL, "/api/v1/ia/health"),
     hit(AI_URL, "/api/v1/catalog/symptoms"),
+    fetchPatients().catch(() => null),
   ]);
 }
 

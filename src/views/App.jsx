@@ -5,7 +5,7 @@ import { comparePriority, createPatient, documentAgeHint, documentDigits, docume
 import { explainWhy } from "../models/explain";
 import {
   analyzeTriage, createPatient as createPatientRecord, fetchPatients, fetchQueueHealth, fetchSymptoms, finishCare, login as loginRequest, markNotified,
-  saveEvaluation, reevaluatePatient, setPresence, startCare, subscribeEvents, warmupServices,
+  readCachedPatients, saveEvaluation, reevaluatePatient, setPresence, startCare, subscribeEvents, warmupServices,
 } from "../services/api";
 import { estimateWaitMinutes, waitSummary } from "../models/waitTimes";
 import { conditionLabel, setSymptomCatalog, symptomCatalog } from "../models/catalog";
@@ -147,7 +147,8 @@ export default function App() {
   const [catalog, setCatalog] = useState([]);
   const [view, setView] = useState("queue");
   const [form, setForm] = useState(EMPTY_FORM);
-  const [patients, setPatients] = useState([]);
+  const [patients, setPatients] = useState(() => readCachedPatients() || []);
+  const [queueLoading, setQueueLoading] = useState(() => !readCachedPatients());
   const [result, setResult] = useState(null);
   const [selected, setSelected] = useState(null);
   const [toast, setToast] = useState("");
@@ -258,8 +259,11 @@ export default function App() {
         setCatalog([]);
       });
     fetchPatients()
-      .then((list) => setPatients(mergeServerList(list)))
-      .catch(() => setPatients([]));
+      .then((list) => {
+        setPatients(mergeServerList(list));
+        setQueueLoading(false);
+      })
+      .catch(() => setQueueLoading(false));
   }, [user]);
 
   function flash(message) {
@@ -323,10 +327,25 @@ export default function App() {
     setLoginBusy(true);
     setLoginError("");
     try {
+      warmupServices();
+      const queuePromise = fetchPatients().catch(() => null);
       const session = await loginRequest({ username, password });
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      warmupServices();
+      const cached = readCachedPatients();
+      if (cached?.length) {
+        setPatients(cached);
+        setQueueLoading(false);
+      } else {
+        setQueueLoading(true);
+      }
       setUser(session);
+      queuePromise.then((list) => {
+        if (list) {
+          setPatients(mergeServerList(list));
+          setLiveQueue({ loading: false, patients: list.filter((p) => p.status === "En espera").sort(comparePriority) });
+        }
+        setQueueLoading(false);
+      });
     } catch (error) {
       setLoginError(error.message || "Usuario o contraseña incorrectos.");
     } finally {
@@ -337,7 +356,8 @@ export default function App() {
   function logout() {
     sessionStorage.removeItem(SESSION_KEY);
     setUser(null);
-    setPatients([]);
+    setPatients(readCachedPatients() || []);
+    setQueueLoading(!readCachedPatients());
     setCatalog([]);
     setSymptomCatalog([]);
     setQuery("");
@@ -685,13 +705,13 @@ export default function App() {
               <button className="btn" onClick={startNewIntake}>Nuevo ingreso</button>
             </div>
             <div className="stats">
-              <article><small>En espera</small><b>{waiting.length}</b></article>
-              <article className="crit"><small>Puntaje 62 o más</small><b>{waiting.filter((p) => p.score >= 62).length}</b></article>
+              <article><small>En espera</small><b>{queueLoading && !patients.length ? "…" : waiting.length}</b></article>
+              <article className="crit"><small>Puntaje 62 o más</small><b>{queueLoading && !patients.length ? "…" : waiting.filter((p) => p.score >= 62).length}</b></article>
               <article className={waiting.some((p) => waitInfo(p, now).overdue) ? "crit" : ""}>
-                <small>Pasaron su tiempo máximo</small><b>{waiting.filter((p) => waitInfo(p, now).overdue).length}</b>
+                <small>Pasaron su tiempo máximo</small><b>{queueLoading && !patients.length ? "…" : waiting.filter((p) => waitInfo(p, now).overdue).length}</b>
               </article>
-              <article><small>No han llegado</small><b>{waiting.filter((p) => p.present === false).length}</b></article>
-              <article><small>En atención</small><b>{patients.filter((p) => p.status === "En atención").length}</b></article>
+              <article><small>No han llegado</small><b>{queueLoading && !patients.length ? "…" : waiting.filter((p) => p.present === false).length}</b></article>
+              <article><small>En atención</small><b>{queueLoading && !patients.length ? "…" : patients.filter((p) => p.status === "En atención").length}</b></article>
             </div>
             {waiting.some((p, i) => noticeDue(p, i + 1, now) && p.phone) && (
               <div className="notice-bar">
@@ -706,7 +726,9 @@ export default function App() {
             )}
             <div className="split">
               <ol className="queue">
-                {waiting.length === 0 && <li className="empty">No hay pacientes en espera en la base de datos.</li>}
+                {waiting.length === 0 && (
+                  <li className="empty">{queueLoading ? "Cargando la sala…" : "No hay pacientes en espera en la base de datos."}</li>
+                )}
                 {waiting.map((p, i) => (
                   <li key={p.id} className={`q ${p.priority.tone} ${selected?.id === p.id ? "sel" : ""} ${waitInfo(p, now).overdue ? "overdue" : ""} ${p.present === false ? "away" : ""}`} onClick={() => setSelected(p)}>
                     <em>{String(i + 1).padStart(2, "0")}</em>
