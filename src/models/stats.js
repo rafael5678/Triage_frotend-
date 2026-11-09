@@ -1,3 +1,4 @@
+/** stats: staff UI module. User-facing copy stays in Spanish. */
 import { waitInfo } from "./notice";
 import { LEVELS } from "./levels";
 
