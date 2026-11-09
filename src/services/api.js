@@ -1,3 +1,4 @@
+/** api: staff UI module. User-facing copy stays in Spanish. */
 import { priorityFromScore } from "../ml/model";
 import { findSymptom } from "../models/catalog";
 import { statsFromPatients } from "../models/stats";
