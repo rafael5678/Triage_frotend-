@@ -18,6 +18,9 @@ function friendlyApiError(text) {
   if (/username already exists/i.test(raw)) {
     return "Ese usuario ya existe.";
   }
+  if (/account is disabled|cuenta.*desactiv/i.test(raw)) {
+    return "Esta cuenta está desactivada. Un administrador tiene que activarla para que pueda entrar.";
+  }
   if (/validation error/i.test(raw)) {
     return "Algún dato no pasó la validación. Revise cédula (5 a 10 números), pulso, oxígeno y presión, y confirme de nuevo.";
   }
@@ -424,7 +427,10 @@ export async function createUser(payload) {
 }
 
 export async function setUserActive(id, active) {
-  return request(AUTH_URL, `/api/v1/admin/users/${id}/active?active=${active}`, { method: "PATCH" });
+  return request(AUTH_URL, `/api/v1/admin/users/${id}/active?active=${active}`, {
+    method: "PATCH",
+    body: JSON.stringify({ active }),
+  });
 }
 
 export async function updateUser(id, payload) {

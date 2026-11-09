@@ -333,6 +333,8 @@ h1, h2, .brand strong, .bar-title {
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th { text-align: left; color: var(--muted); font-size: 12px; padding: 8px; border-bottom: 1px solid var(--line); }
 td { padding: 12px 8px; border-bottom: 1px solid #efe8dc; vertical-align: top; }
+tr.account-off td { color: var(--muted); }
+.account-off-tag { color: #9a3412; font-size: 13px; }
 .toast {
   margin: 12px 32px 0; background: #ecfdf5; color: #065f46;
   border: 1px solid #99f6e4; padding: 10px 14px; border-radius: 12px;

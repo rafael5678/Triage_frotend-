@@ -166,10 +166,16 @@ export default function AdminPortal({ user, onLogout }) {
   }
 
   async function toggleActive(account) {
+    const nextActive = account.active === false;
+    setAccounts((rows) => rows.map((row) => (row.id === account.id ? { ...row, active: nextActive } : row)));
     try {
-      await setUserActive(account.id, !account.active);
+      await setUserActive(account.id, nextActive);
       await reload();
+      flash(nextActive
+        ? "Cuenta activada. Esa persona ya puede entrar."
+        : "Cuenta desactivada. Esa persona ya no puede entrar.");
     } catch (error) {
+      await reload();
       flash(error.message);
     }
   }
@@ -302,14 +308,15 @@ export default function AdminPortal({ user, onLogout }) {
             <div className="sheet table-wrap" style={{ marginTop: 16 }}>
               <table>
                 <thead>
-                  <tr><th>Persona</th><th>Usuario</th><th>Módulo</th><th></th></tr>
+                  <tr><th>Persona</th><th>Usuario</th><th>Módulo</th><th>Estado</th><th></th></tr>
                 </thead>
                 <tbody>
                   {accounts.map((a) => (
-                    <tr key={a.id}>
+                    <tr key={a.id} className={a.active === false ? "account-off" : ""}>
                       <td>{a.displayName}</td>
                       <td>{a.username}</td>
                       <td>{a.role === "ADMIN" ? "Administrador" : "Urgencias"}</td>
+                      <td>{a.active === false ? <b className="account-off-tag">Desactivada</b> : "Activa"}</td>
                       <td>
                         <button className="text" type="button" onClick={() => startEdit(a)}>Editar</button>
                         {a.id !== user.id && (
