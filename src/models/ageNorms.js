@@ -1,5 +1,5 @@
 /**
- * Reposo según la edad. El oxígeno casi no cambia (95–100 a cualquier edad);
+ * Reposo according to la edad. El oxígeno casi no cambia (95–100 a cualquier edad);
  * pulso, presión y respiración sí.
  */
 function band(label, hr, rr, sbp, dbp, restHr, restSbp, restDbp, restRr, restSpo2 = 97) {
