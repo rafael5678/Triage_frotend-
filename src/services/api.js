@@ -1,5 +1,6 @@
 import { priorityFromScore } from "../ml/model";
 import { findSymptom } from "../models/catalog";
+import { statsFromPatients } from "../models/stats";
 
 function friendlyApiError(text) {
   const raw = String(text || "");
@@ -409,11 +410,7 @@ export async function explainField(field, value, context) {
 }
 
 export async function fetchStats() {
-  try {
-    return await request(EVAL_URL, "/api/v1/triage/evaluations/stats", {}, 8000);
-  } catch {
-    return request(QUEUE_URL, "/api/v1/triage/stats", {}, 8000);
-  }
+  return statsFromPatients(await fetchPatients());
 }
 
 export async function fetchBoard() {

@@ -62,7 +62,7 @@ export default function StatsView({ conditionLabel = (id) => id }) {
           <h1>Estadísticas de la sala</h1>
           <p className="sub">Calculadas con los pacientes guardados en la base. Se actualizan solas cuando cambia la sala.</p>
         </div>
-        <button className="ghost" onClick={load} disabled={loading}>{loading ? "Cargando…" : "Actualizar"}</button>
+        <button className="ghost" onClick={() => load(false)} disabled={loading}>{loading ? "Cargando…" : "Actualizar"}</button>
       </div>
       {error && <p className="form-err">{error}</p>}
       {stats && (
