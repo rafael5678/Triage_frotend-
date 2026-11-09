@@ -980,7 +980,7 @@ export default function App() {
               </div>
               <div className="sheet">
                 <h3>Qué añade la evaluación</h3>
-                {result.iaActive && result.geminiScore != null && <p className="muted">Puntaje que sugiere la evaluación: {Number(result.geminiScore).toFixed(1)} / 100</p>}
+                {result.iaActive && <p className="muted">Puntaje de la cola: {Number(result.score).toFixed(1)} / 100</p>}
                 {!result.iaActive && <p className="muted">Esta vez se usó solo el protocolo de signos. Puede volver a calcular en un momento.</p>}
                 <ul className="why-list big">
                   {(result.geminiReasons || []).filter((r) => !result.photoFindings || !String(r).includes(String(result.photoFindings).slice(0, 40))).map((r) => <li key={r}>{r}</li>)}
