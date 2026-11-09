@@ -412,6 +412,10 @@ export async function fetchAdminUsers() {
   return request(AUTH_URL, "/api/v1/admin/users");
 }
 
+export async function fetchAdminUser(id) {
+  return request(AUTH_URL, `/api/v1/admin/users/${id}`);
+}
+
 export async function createUser(payload) {
   return request(AUTH_URL, "/api/v1/admin/users", {
     method: "POST",

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { createUser, fetchAdminSymptoms, fetchAdminUsers, fetchPatients, saveSymptom, setUserActive, updateUser } from "../services/api";
+import { createUser, fetchAdminSymptoms, fetchAdminUser, fetchAdminUsers, fetchPatients, saveSymptom, setUserActive, updateUser } from "../services/api";
 import { comparePriority } from "../models/patient";
-import { loginFieldError, withoutSpaces, PASSWORD_MIN, PASSWORD_MAX, USERNAME_MIN, USERNAME_MAX } from "../models/credentials";
+import { loginFieldError, withoutSpaces, LOGIN_PASSWORD_MAX, PASSWORD_MIN, PASSWORD_MAX, USERNAME_MIN, USERNAME_MAX } from "../models/credentials";
 import { priorityFromScore } from "../ml/model";
 import StatsView from "./StatsView";
 
@@ -32,6 +32,7 @@ export default function AdminPortal({ user, onLogout }) {
   const [symptomForm, setSymptomForm] = useState(EMPTY_SYMPTOM);
   const [userForm, setUserForm] = useState(EMPTY_USER);
   const [editingId, setEditingId] = useState(null);
+  const [originalPassword, setOriginalPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
@@ -83,18 +84,35 @@ export default function AdminPortal({ user, onLogout }) {
     }
   }
 
-  function startEdit(account) {
+  async function startEdit(account) {
     setEditingId(account.id);
+    setShowPassword(false);
+    setOriginalPassword("");
     setUserForm({
       username: account.username || "",
       password: "",
       displayName: account.displayName || "",
       role: account.role || "STAFF",
     });
+    try {
+      const detail = await fetchAdminUser(account.id);
+      const current = detail.password || "";
+      setOriginalPassword(current);
+      setUserForm({
+        username: detail.username || account.username || "",
+        password: current,
+        displayName: detail.displayName || account.displayName || "",
+        role: detail.role || account.role || "STAFF",
+      });
+    } catch (error) {
+      flash(error.message);
+    }
   }
 
   function cancelEdit() {
     setEditingId(null);
+    setOriginalPassword("");
+    setShowPassword(false);
     setUserForm(EMPTY_USER);
   }
 
@@ -102,7 +120,11 @@ export default function AdminPortal({ user, onLogout }) {
     event.preventDefault();
     const username = withoutSpaces(userForm.username);
     const password = withoutSpaces(userForm.password);
-    const invalid = loginFieldError(username, password, { passwordRequired: !editingId });
+    const passwordUnchanged = Boolean(editingId && password && password === originalPassword);
+    const invalid = loginFieldError(username, password, {
+      passwordRequired: !editingId,
+      passwordMax: passwordUnchanged ? LOGIN_PASSWORD_MAX : PASSWORD_MAX,
+    });
     if (invalid) {
       flash(invalid);
       return;
@@ -123,6 +145,8 @@ export default function AdminPortal({ user, onLogout }) {
         if (password) payload.password = password;
         await updateUser(editingId, payload);
         setEditingId(null);
+        setOriginalPassword("");
+        setShowPassword(false);
         setUserForm(EMPTY_USER);
         await reload();
         flash(self
@@ -258,14 +282,10 @@ export default function AdminPortal({ user, onLogout }) {
                 </label>
                 <label>Contraseña
                   <span className="pass-wrap">
-                    <input required={!editingId} type={showPassword ? "text" : "password"} autoComplete="new-password" maxLength={PASSWORD_MAX} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: withoutSpaces(e.target.value) })} />
+                    <input required={!editingId} type={showPassword ? "text" : "password"} autoComplete="new-password" maxLength={editingId ? LOGIN_PASSWORD_MAX : PASSWORD_MAX} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: withoutSpaces(e.target.value) })} />
                     <button type="button" className="text show-pass" onClick={() => setShowPassword((v) => !v)}>{showPassword ? "Ocultar" : "Mostrar"}</button>
                   </span>
-                  <small className="hint">
-                    {editingId
-                      ? `Nueva clave: de ${PASSWORD_MIN} a ${PASSWORD_MAX} caracteres, sin espacios. Si la deja vacía, se queda la que ya tenía (no se puede leer la antigua: está cifrada).`
-                      : `De ${PASSWORD_MIN} a ${PASSWORD_MAX} caracteres, sin espacios.`}
-                  </small>
+                  <small className="hint">De {PASSWORD_MIN} a {PASSWORD_MAX} caracteres, sin espacios.</small>
                 </label>
                 <label>Módulo
                   <select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}>
