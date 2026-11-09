@@ -168,27 +168,31 @@ export default function App() {
   }
 
   function mergeServerList(list) {
-    const mapped = (list || []).map((p) => {
+    const pending = [...pendingQueueRef.current.values()];
+    const used = new Set();
+    const mapped = (list || []).map((raw) => {
+      let p = raw;
       const hold = passingRef.current.has(p.id) || confirmedCareRef.current.has(p.id);
-      if (!hold) return p;
-      const inCare = p.status === "En atención" || p.statusCode === "EN_ATENCION";
-      if (inCare) {
-        confirmedCareRef.current.delete(p.id);
+      if (hold) {
+        const inCare = p.status === "En atención" || p.statusCode === "EN_ATENCION";
+        if (inCare) {
+          confirmedCareRef.current.delete(p.id);
+        } else if (!passingRef.current.has(p.id)) {
+          p = { ...p, status: "En atención", statusCode: "EN_ATENCION", careStartedAt: p.careStartedAt || Date.now() };
+        }
+      }
+      const hit = pending.find((q) =>
+        String(q.id) === String(p.id) || (q.document && p.document && String(q.document) === String(p.document))
+      );
+      if (!hit) return p;
+      used.add(hit);
+      if (p.status === "En espera" || p.statusCode === "EN_ESPERA") {
+        pendingQueueRef.current.delete(String(hit.id));
         return p;
       }
-      if (passingRef.current.has(p.id)) return p;
-      return { ...p, status: "En atención", statusCode: "EN_ATENCION", careStartedAt: p.careStartedAt || Date.now() };
+      return { ...p, ...hit, id: p.id, status: "En espera", statusCode: "EN_ESPERA" };
     });
-    const ids = new Set(mapped.map((p) => String(p.id)));
-    const docs = new Set(mapped.map((p) => String(p.document || "")).filter(Boolean));
-    const extra = [];
-    for (const [key, pending] of pendingQueueRef.current.entries()) {
-      if (ids.has(String(pending.id)) || (pending.document && docs.has(String(pending.document)))) {
-        pendingQueueRef.current.delete(key);
-        continue;
-      }
-      extra.push(pending);
-    }
+    const extra = pending.filter((q) => !used.has(q) && !mapped.some((p) => String(p.id) === String(q.id)));
     return extra.length ? [...extra, ...mapped].sort(comparePriority) : mapped;
   }
 
@@ -442,7 +446,6 @@ export default function App() {
     }
     setConfirmBusy(true);
     setConfirmError("");
-    const snapshot = result;
     const payload = {
       ...result,
       ...toPayload(form.name ? form : result),
@@ -484,27 +487,36 @@ export default function App() {
     if (link) {
       window.setTimeout(() => window.open(link, "_blank", "noopener"), 400);
     }
-    try {
-      const created = await createPatientRecord(payload);
-      const patientId = created.patientId;
-      pendingQueueRef.current.delete(tempId);
-      const withId = { ...saved, id: patientId };
-      pendingQueueRef.current.set(String(patientId), withId);
-      setPatients((list) => [{ ...withId }, ...list.filter((p) => p.id !== tempId && p.id !== patientId)].sort(comparePriority));
-      saveEvaluation(payload, patientId)
-        .then((scored) => {
-          pendingQueueRef.current.delete(String(patientId));
-          setPatients((list) => [{ ...withId, ...scored }, ...list.filter((p) => p.id !== patientId)].sort(comparePriority));
-        })
-        .catch((err) => flash(`Quedó en la sala; el puntaje se está guardando: ${err.message}`));
-    } catch (error) {
-      pendingQueueRef.current.delete(tempId);
-      setPatients((list) => list.filter((p) => p.id !== tempId));
-      setResult(snapshot);
-      setView("result");
-      setConfirmError(error.message || "No se pudo guardar en la cola.");
-      flash(`No se guardó en la cola: ${error.message}`);
+    void persistAdmission(payload, tempId, saved);
+  }
+
+  async function persistAdmission(payload, tempId, saved) {
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const created = await createPatientRecord(payload);
+        const patientId = created.patientId;
+        pendingQueueRef.current.delete(tempId);
+        const withId = { ...saved, id: patientId, status: "En espera", statusCode: "EN_ESPERA" };
+        pendingQueueRef.current.set(String(patientId), withId);
+        setPatients((list) => [{ ...withId }, ...list.filter((p) => p.id !== tempId && p.id !== patientId)].sort(comparePriority));
+        const scored = await saveEvaluation({ ...payload, newVisit: true }, patientId);
+        const kept = {
+          ...withId,
+          ...scored,
+          id: patientId,
+          status: "En espera",
+          statusCode: "EN_ESPERA",
+        };
+        pendingQueueRef.current.set(String(patientId), kept);
+        setPatients((list) => [kept, ...list.filter((p) => p.id !== patientId && p.id !== tempId)].sort(comparePriority));
+        return;
+      } catch (error) {
+        lastError = error;
+        await new Promise((resolve) => window.setTimeout(resolve, 700 * attempt));
+      }
     }
+    flash(`Sigue en la sala. No se alcanzó a guardar en el servidor: ${lastError?.message || "sin respuesta"}.`);
   }
 
   function replacePatient(updated) {

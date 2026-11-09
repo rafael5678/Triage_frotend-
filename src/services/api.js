@@ -236,6 +236,7 @@ function vitalsBody(form, patientId, { withPhoto = true } = {}) {
   if (body.painScale != null && (body.painScale < 0 || body.painScale > 10)) delete body.painScale;
   if (catalogSeverity != null) body.conditionSeverity = catalogSeverity;
   if (form.present === false) body.present = false;
+  if (form.newVisit) body.newVisit = true;
   if (withPhoto && form.photo?.dataUrl) {
     body.photoBase64 = form.photo.dataUrl;
     body.photoMime = form.photo.mime;
@@ -248,7 +249,7 @@ export async function createPatient(form) {
   const created = await request(AUTH_URL, "/api/v1/triage/patients", {
     method: "POST",
     body: JSON.stringify(intakeBody(form)),
-  });
+  }, 12000);
   const patientId = created.patientId || created.pacienteId || created.id;
   if (!patientId) {
     throw new Error("No se pudo crear la ficha del paciente. Intente confirmar otra vez.");
@@ -260,7 +261,7 @@ export async function saveEvaluation(form, patientId) {
   const scored = await request(EVAL_URL, "/api/v1/triage/evaluations", {
     method: "POST",
     body: JSON.stringify(vitalsBody(form, patientId, { withPhoto: false })),
-  }, 20000);
+  }, 12000);
   return mapFromApi(scored);
 }
 
