@@ -1,3 +1,4 @@
+/** model: staff UI module. User-facing copy stays in Spanish. */
 import { FEATURES, generateDataset, toFeatures, news2Score } from "./dataset";
 import { CONDITIONS } from "./conditions";
 import { catalogEsiFloor, findSymptom } from "../models/catalog";
