@@ -22,7 +22,7 @@ function Bars({ data, labelOf = (k) => k, toneOf = () => "", empty }) {
   );
 }
 
-/** Estadísticas de la sala, con los mismos pacientes que ya están en la base. */
+/** Estadísticas de la room, con los mismos patients que ya están en la base. */
 export default function StatsView({ conditionLabel = (id) => id, patients = null, loadingList = false }) {
   const [stats, setStats] = useState(() => (Array.isArray(patients) ? statsFromPatients(patients) : null));
   const [error, setError] = useState("");
