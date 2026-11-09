@@ -184,13 +184,36 @@ export default function App() {
   const pendingQueueRef = useRef(new Map());
   const holdReloadsUntil = useRef(0);
   const careLockRef = useRef(new Set());
+  const inCareLocalRef = useRef(new Map());
 
   function careKey(id, document) {
     return [`id:${String(id || "")}`, document ? `doc:${String(document)}` : null].filter(Boolean);
   }
 
-  function lockCare(id, document) {
+  function rememberInCare(patient) {
+    if (!patient?.id) return;
+    const row = {
+      ...patient,
+      status: "En atención",
+      statusCode: "EN_ATENCION",
+      careStartedAt: patient.careStartedAt || Date.now(),
+    };
+    inCareLocalRef.current.set(String(patient.id), row);
+    if (patient.document) inCareLocalRef.current.set(`doc:${String(patient.document)}`, row);
+  }
+
+  function forgetInCare(id, document) {
+    inCareLocalRef.current.delete(String(id));
+    if (document) inCareLocalRef.current.delete(`doc:${String(document)}`);
+    for (const key of careKey(id, document)) {
+      careLockRef.current.delete(key);
+      inCareLocalRef.current.delete(key);
+    }
+  }
+
+  function lockCare(id, document, patient) {
     for (const key of careKey(id, document)) careLockRef.current.add(key);
+    if (patient) rememberInCare({ ...patient, id: patient.id || id, document: patient.document || document });
   }
 
   function isCareLocked(id, document) {
@@ -261,7 +284,27 @@ export default function App() {
       && !isCareLocked(q.id, q.document)
       && !mapped.some((p) => String(p.id) === String(q.id))
     );
-    return extra.length ? [...extra, ...mapped].sort(comparePriority) : mapped;
+    const mappedIds = new Set(mapped.map((p) => String(p.id)));
+    const mappedDocs = new Set(mapped.map((p) => String(p.document || "")).filter(Boolean));
+    const keptCare = [];
+    const seenCare = new Set();
+    for (const row of inCareLocalRef.current.values()) {
+      const key = String(row.id);
+      if (seenCare.has(key)) continue;
+      seenCare.add(key);
+      const onServer = mappedIds.has(key) || (row.document && mappedDocs.has(String(row.document)));
+      if (onServer) {
+        const server = mapped.find((p) => String(p.id) === key || (row.document && String(p.document) === String(row.document)));
+        if (server && (server.status === "En atención" || server.statusCode === "EN_ATENCION"
+          || server.status === "Atendido" || server.statusCode === "ATENDIDO")) {
+          forgetInCare(row.id, row.document);
+        }
+        continue;
+      }
+      keptCare.push({ ...row, status: "En atención", statusCode: "EN_ATENCION" });
+    }
+    const combined = [...keptCare, ...extra, ...mapped];
+    return combined.length !== mapped.length ? combined.sort(comparePriority) : mapped;
   }
 
   const waiting = useMemo(
@@ -627,20 +670,22 @@ export default function App() {
     }
     const previous = patients.find((p) => p.id === id);
     forgetPending(id, previous?.document);
-    lockCare(id, previous?.document);
-    setPassing(id, true);
-    confirmedCareRef.current.add(id);
-    replacePatient({
+    const moved = {
       ...(previous || { id }),
       status: "En atención",
       statusCode: "EN_ATENCION",
       careStartedAt: previous?.careStartedAt || Date.now(),
-    });
+    };
+    lockCare(id, previous?.document, moved);
+    setPassing(id, true);
+    confirmedCareRef.current.add(id);
+    replacePatient(moved);
     setSelected((current) => (current?.id === id ? null : current));
     try {
       const updated = await startCare(id);
-      lockCare(updated.id || id, updated.document || previous?.document);
-      replacePatient({ ...updated, status: "En atención", statusCode: "EN_ATENCION" });
+      const inCare = { ...updated, status: "En atención", statusCode: "EN_ATENCION" };
+      lockCare(inCare.id || id, inCare.document || previous?.document, inCare);
+      replacePatient(inCare);
       const minutes = updated.careStartedAt ? Math.round((updated.careStartedAt - updated.arrivedAt) / 60000) : null;
       flash(`Pasa a atención${minutes != null ? ` después de ${minutesLabel(minutes)} de espera` : ""}.`);
     } catch (error) {
@@ -652,7 +697,9 @@ export default function App() {
 
   async function closeCare(id, status) {
     try {
-      replacePatient(await finishCare(id, status));
+      const done = await finishCare(id, status);
+      forgetInCare(id, done.document);
+      replacePatient(done);
       flash(status === "ATENDIDO" ? "Atención terminada." : "Se marcó como cancelado (se fue sin ser atendido).");
     } catch (error) {
       flash(error.message);
