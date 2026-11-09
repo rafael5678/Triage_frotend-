@@ -37,7 +37,7 @@ function Block({ title, items, tone }) {
   );
 }
 
-/** Cada signo, en palabras: cómo se toma, qué es normal y por qué movió el puntaje. */
+/** Cada signo, en palabras: cómo se toma, qué es normal y por qué movió el score. */
 export function VitalGuide({ patient }) {
   const rows = readVitals(patient);
   return (
