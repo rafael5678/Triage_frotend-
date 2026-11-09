@@ -1,3 +1,4 @@
+﻿/* English: identifiers in this file are English; on-screen copy stays Spanish. */
 :root {
   --ink: #16302a;
   --title: #123329;
@@ -691,3 +692,4 @@ td.late { color: var(--i); font-weight: 700; }
   .board-row { grid-template-columns: 40px 1fr auto; font-size: 16px; }
   .board-row .board-area, .board-row .board-wait { grid-column: 2 / -1; text-align: left; }
 }
+
