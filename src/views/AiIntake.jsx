@@ -1,3 +1,4 @@
+/** AiIntake: staff UI module. User-facing copy stays in Spanish. */
 import { useState } from "react";
 import { intakeWithAi } from "../services/api";
 import { resizePhoto } from "../models/photo";
