@@ -172,7 +172,7 @@ export function fillRestingIfEmpty(form) {
   return { ...form, ...patch };
 }
 
-/** Si cambia la edad, los signos que aún son de reposo se recalcan para esa edad. */
+/** Si cambia la edad, los vitals que aún son de reposo se recalcan para esa edad. */
 export function refreshEstimatedRest(form, age) {
   const rest = ageNorms(age, pregOf(form)).rest;
   const estimated = new Set(form.estimatedFields || []);
