@@ -86,7 +86,7 @@ const EMPTY_FORM = {
   story: "",
 };
 
-/** Insignias de tiempo y presencia que se ven en la cola. */
+/** Insignias de tiempo y presence que se ven en la queue. */
 function WaitBadges({ patient, now }) {
   const w = waitInfo(patient, now);
   return (
@@ -288,7 +288,7 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  /** Cola en vivo: el servidor avisa cuando algo cambió y aquí se vuelve a pedir la lista. */
+  /** queue en vivo: el servidor avisa when algo cambió y aquí se vuelve a pedir la lista. */
   useEffect(() => {
     if (!user || user.role === "ADMIN") return undefined;
     const reload = () => {
@@ -668,7 +668,7 @@ export default function App() {
     }
   }
 
-  /** Abre WhatsApp con el mensaje listo y deja constancia del aviso. */
+  /** Abre WhatsApp con el mensaje listo y deja constancia del notice. */
   async function sendWhatsapp(patient) {
     const link = whatsappLink(patient, positionOf(patient.id), now);
     if (!link) {
