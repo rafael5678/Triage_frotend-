@@ -1,3 +1,4 @@
+/** patient: staff UI module. User-facing copy stays in Spanish. */
 import { findSymptom } from "./catalog";
 import { CONDITIONS } from "../ml/conditions";
 import { news2Score } from "../ml/dataset";
