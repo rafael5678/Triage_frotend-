@@ -37,8 +37,8 @@ export function documentError(raw) {
 }
 
 /**
- * Guía según la edad. Nunca bloquea: en Colombia conviven NUIP de 10 dígitos (suelen
- * empezar en 1, p. ej. 10…) y cédulas antiguas más cortas o con prefijo 50–69.
+ * Guía according to la edad. Nunca bloquea: en Colombia conviven NUIP de 10 dígitos (suelen
+ * empezar en 1, p. ej. 10…) y documents antiguas más cortas o con prefijo 50–69.
  */
 export function documentAgeHint(raw, age) {
   const digits = String(raw || "").replace(/\D/g, "");
