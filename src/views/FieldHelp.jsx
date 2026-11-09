@@ -1,3 +1,4 @@
+/** FieldHelp: staff UI module. User-facing copy stays in Spanish. */
 import { useState } from "react";
 import { explainField } from "../services/api";
 
