@@ -1,3 +1,4 @@
+/** credentials: staff UI module. User-facing copy stays in Spanish. */
 export const USERNAME_MIN = 3;
 export const USERNAME_MAX = 32;
 export const PASSWORD_MIN = 8;
