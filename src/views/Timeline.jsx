@@ -1,3 +1,4 @@
+/** Timeline: staff UI module. User-facing copy stays in Spanish. */
 import { useEffect, useState } from "react";
 import { fetchHistory } from "../services/api";
 
