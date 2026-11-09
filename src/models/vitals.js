@@ -1,3 +1,4 @@
+/** vitals: staff UI module. User-facing copy stays in Spanish. */
 import { ageNorms, oxygenWord, rangeText } from "./ageNorms";
 
 function num(raw) {
