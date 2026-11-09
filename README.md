@@ -1,4 +1,4 @@
-# Emergency triage frontend
+﻿# Emergency triage frontend
 
 React 18 + Vite client for the hospital queue. The UI is Spanish. Source folders and identifiers are English.
 
@@ -22,3 +22,8 @@ npm install
 npm run dev
 npm run build
 ```
+
+## Code language
+
+Identifiers are English. The staff UI stays Spanish.
+
