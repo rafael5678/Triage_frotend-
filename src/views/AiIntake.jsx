@@ -13,7 +13,7 @@ function isEmpty(value) {
 }
 
 /**
- * Relato escrito y foto opcional para armar el ingreso.
+ * Relato escrito y foto opcional para armar el intake.
  */
 export default function AiIntake({ form, onApply, comorbidities, flash }) {
   const story = form.story || "";
