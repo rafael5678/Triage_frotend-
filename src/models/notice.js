@@ -3,7 +3,7 @@ const DEFAULT_MAX_WAIT = 30;
 export const NOTICE_LEAD_MINUTES = 10;
 export const NOTICE_POSITION_LEAD = 2;
 
-/** Cuánto lleva esperando desde que llegó y cuánto le queda de su tiempo máximo (negativo = vencido). */
+/** Cuánto lleva waitndo from que arrived y cuánto le queda de su tiempo máximo (negativo = vencido). */
 export function waitInfo(patient, now = Date.now()) {
   const start = patient.arrivedAt || patient.evaluatedAt || now;
   const waited = Math.max(0, Math.floor((now - start) / 60000));
@@ -37,7 +37,7 @@ function clock(patient) {
   return new Date(at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
 }
 
-/** Mismo texto que manda el aviso automático del servidor. */
+/** Mismo texto que manda el notice automático del servidor. */
 export function noticeMessage(patient, position, now = Date.now()) {
   const name = firstName(patient.name);
   const ticket = ticketOf(patient);
@@ -82,7 +82,7 @@ export function phoneError(raw) {
   return "";
 }
 
-/** Celular colombiano válido → 57 + 10 dígitos. */
+/** mobile colombiano válido → 57 + 10 dígitos. */
 export function normalizePhone(raw) {
   if (!isValidWhatsApp(raw)) return "";
   return `57${localTen(raw)}`;
