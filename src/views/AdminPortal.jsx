@@ -1,3 +1,4 @@
+/** AdminPortal: staff UI module. User-facing copy stays in Spanish. */
 import { useEffect, useState } from "react";
 import { createUser, fetchAdminSymptoms, fetchAdminUser, fetchAdminUsers, fetchPatients, saveSymptom, setUserActive, updateUser } from "../services/api";
 import { comparePriority, matchesPatientSearch } from "../models/patient";
