@@ -1,3 +1,4 @@
+/** waitTimes: staff UI module. User-facing copy stays in Spanish. */
 import { priorityFromScore } from "../ml/model";
 
 /** ESI / triage target times (minutes). Protocol reference, not a promise. */
