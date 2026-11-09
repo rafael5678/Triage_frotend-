@@ -315,7 +315,7 @@ export default function App() {
     event.preventDefault();
     const username = withoutSpaces(login.username);
     const password = withoutSpaces(login.password);
-    const invalid = loginFieldError(username, password);
+      const invalid = loginFieldError(username, password, { passwordMax: 64 });
     if (invalid) {
       setLoginError(invalid);
       return;
@@ -597,7 +597,7 @@ export default function App() {
                 <button type="button" className="text show-pass" onClick={() => setShowPassword((v) => !v)}>{showPassword ? "Ocultar" : "Mostrar"}</button>
               </span>
             </label>
-            <p className="hint">Usuario y contraseña sin espacios. La clave va de 8 a 64 caracteres.</p>
+            <p className="hint">Usuario: 3 a 32 caracteres, sin espacios. Contraseña: mínimo 8, sin espacios.</p>
             {loginError && <p className="form-err">{loginError}</p>}
             <button className="btn wide" type="submit" disabled={loginBusy}>{loginBusy ? "Comprobando…" : "Entrar →"}</button>
           </form>

@@ -32,6 +32,7 @@ export default function AdminPortal({ user, onLogout }) {
   const [symptomForm, setSymptomForm] = useState(EMPTY_SYMPTOM);
   const [userForm, setUserForm] = useState(EMPTY_USER);
   const [editingId, setEditingId] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
@@ -253,11 +254,18 @@ export default function AdminPortal({ user, onLogout }) {
                 </label>
                 <label>Usuario
                   <input required autoComplete="off" maxLength={USERNAME_MAX} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: withoutSpaces(e.target.value) })} />
-                  <small className="hint">{USERNAME_MIN} a {USERNAME_MAX} caracteres, sin espacios</small>
+                  <small className="hint">De {USERNAME_MIN} a {USERNAME_MAX} caracteres. Letras, números, punto o guion. Sin espacios ni tildes.</small>
                 </label>
                 <label>Contraseña
-                  <input required={!editingId} type="password" autoComplete="new-password" maxLength={PASSWORD_MAX} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: withoutSpaces(e.target.value) })} />
-                  <small className="hint">{editingId ? "Déjela vacía para no cambiarla. " : ""}{PASSWORD_MIN} a {PASSWORD_MAX} caracteres, sin espacios</small>
+                  <span className="pass-wrap">
+                    <input required={!editingId} type={showPassword ? "text" : "password"} autoComplete="new-password" maxLength={PASSWORD_MAX} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: withoutSpaces(e.target.value) })} />
+                    <button type="button" className="text show-pass" onClick={() => setShowPassword((v) => !v)}>{showPassword ? "Ocultar" : "Mostrar"}</button>
+                  </span>
+                  <small className="hint">
+                    {editingId
+                      ? `Nueva clave: de ${PASSWORD_MIN} a ${PASSWORD_MAX} caracteres, sin espacios. Si la deja vacía, se queda la que ya tenía (no se puede leer la antigua: está cifrada).`
+                      : `De ${PASSWORD_MIN} a ${PASSWORD_MAX} caracteres, sin espacios.`}
+                  </small>
                 </label>
                 <label>Módulo
                   <select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}>
