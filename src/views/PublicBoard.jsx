@@ -1,3 +1,4 @@
+/** PublicBoard: staff UI module. User-facing copy stays in Spanish. */
 import { useEffect, useRef, useState } from "react";
 import { fetchBoard, subscribeEvents } from "../services/api";
 import { levelInfo } from "../models/levels";
