@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { fetchStats, subscribeEvents } from "../services/api";
+import { fetchPatients } from "../services/api";
 import { LEVELS } from "../models/levels";
+import { statsFromPatients } from "../models/stats";
 
 const STATUS_LABELS = { EN_ESPERA: "En espera", EN_ATENCION: "En atención", ATENDIDO: "Atendido", CANCELADO: "Cancelado" };
 
@@ -21,17 +22,23 @@ function Bars({ data, labelOf = (k) => k, toneOf = () => "", empty }) {
   );
 }
 
-/** Estadísticas de la sala que calcula ms-cola-espera con los datos de la base. */
-export default function StatsView({ conditionLabel = (id) => id }) {
-  const [stats, setStats] = useState(null);
+/** Estadísticas de la sala, con los mismos pacientes que ya están en la base. */
+export default function StatsView({ conditionLabel = (id) => id, patients = null, loadingList = false }) {
+  const [stats, setStats] = useState(() => (Array.isArray(patients) ? statsFromPatients(patients) : null));
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!Array.isArray(patients));
 
-  async function load(silent = false) {
-    if (!silent) setLoading(true);
+  async function load() {
+    if (Array.isArray(patients)) {
+      setStats(statsFromPatients(patients));
+      setLoading(false);
+      setError("");
+      return;
+    }
+    setLoading(true);
     setError("");
     try {
-      setStats(await fetchStats());
+      setStats(statsFromPatients(await fetchPatients()));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -40,29 +47,28 @@ export default function StatsView({ conditionLabel = (id) => id }) {
   }
 
   useEffect(() => {
-    load(false);
-    let timer;
-    const stop = subscribeEvents(() => {
-      clearTimeout(timer);
-      timer = setTimeout(() => load(true), 4000);
-    });
-    return () => {
-      stop();
-      clearTimeout(timer);
-    };
-  }, []);
+    if (Array.isArray(patients)) {
+      setStats(statsFromPatients(patients));
+      setLoading(loadingList && patients.length === 0);
+      setError("");
+      return undefined;
+    }
+    load();
+    return undefined;
+  }, [patients, loadingList]);
 
   const hours = Object.entries(stats?.arrivalsByHour || {});
   const maxHour = Math.max(1, ...hours.map(([, v]) => v));
+  const busy = loading || (loadingList && !stats);
 
   return (
     <section className="page">
       <div className="hero-line">
         <div>
           <h1>Estadísticas de la sala</h1>
-          <p className="sub">Calculadas con los pacientes guardados en la base. Se actualizan solas cuando cambia la sala.</p>
+          <p className="sub">Calculadas con los pacientes guardados en la base. Pulse actualizar para volver a leerla.</p>
         </div>
-        <button className="ghost" onClick={() => load(false)} disabled={loading}>{loading ? "Cargando…" : "Actualizar"}</button>
+        <button className="ghost" onClick={load} disabled={busy}>{busy ? "Cargando…" : "Actualizar"}</button>
       </div>
       {error && <p className="form-err">{error}</p>}
       {stats && (

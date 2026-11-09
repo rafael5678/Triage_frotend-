@@ -335,7 +335,6 @@ export function warmupServices() {
     hit(QUEUE_URL, "/api/v1/triage/health"),
     hit(AI_URL, "/api/v1/ia/health"),
     hit(AI_URL, "/api/v1/catalog/symptoms"),
-    fetchPatients().catch(() => null),
   ]);
 }
 

@@ -29,6 +29,7 @@ export default function AdminPortal({ user, onLogout }) {
   const [symptoms, setSymptoms] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [patients, setPatients] = useState([]);
+  const [patientsLoading, setPatientsLoading] = useState(false);
   const [symptomForm, setSymptomForm] = useState(EMPTY_SYMPTOM);
   const [userForm, setUserForm] = useState(EMPTY_USER);
   const [editingId, setEditingId] = useState(null);
@@ -61,17 +62,23 @@ export default function AdminPortal({ user, onLogout }) {
   }
 
   async function loadPatients() {
+    if (patients.length === 0) setPatientsLoading(true);
     try {
       setPatients(await fetchPatients());
     } catch (error) {
       flash(error.message);
+    } finally {
+      setPatientsLoading(false);
     }
   }
 
   useEffect(() => {
+    loadPatients();
+  }, []);
+
+  useEffect(() => {
     if (tab === "symptoms") loadSymptoms();
     if (tab === "users") loadUsers();
-    if (tab === "patients") loadPatients();
   }, [tab]);
 
   async function onSaveSymptom(event) {
@@ -350,7 +357,11 @@ export default function AdminPortal({ user, onLogout }) {
         )}
 
         {tab === "stats" && (
-          <StatsView conditionLabel={(id) => symptoms.find((s) => s.id === id)?.label || id} />
+          <StatsView
+            conditionLabel={(id) => symptoms.find((s) => s.id === id)?.label || id}
+            patients={patients}
+            loadingList={patientsLoading}
+          />
         )}
 
         {tab === "patients" && (
@@ -359,7 +370,8 @@ export default function AdminPortal({ user, onLogout }) {
             <p className="sub">Los ingresos los hace el personal. Aquí solo se consultan los que ya están en la base.</p>
             <input className="search-box" placeholder="Buscar por nombre o cédula…" value={query} onChange={(e) => setQuery(e.target.value)} />
             <div className="sheet table-wrap">
-              {patients.length === 0 && <p className="muted">No hay pacientes todavía.</p>}
+              {patientsLoading && patients.length === 0 && <p className="muted">Cargando pacientes…</p>}
+              {!patientsLoading && patients.length === 0 && <p className="muted">No hay pacientes todavía.</p>}
               <table>
                 <thead>
                   <tr><th>Persona</th><th>Documento</th><th>Puntaje</th><th>Estado</th></tr>

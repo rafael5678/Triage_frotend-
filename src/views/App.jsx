@@ -147,7 +147,6 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [query, setQuery] = useState("");
   const [recheck, setRecheck] = useState(null);
-  const [liveQueue, setLiveQueue] = useState({ loading: true, patients: [] });
   const [now, setNow] = useState(Date.now());
   const [live, setLive] = useState(false);
   const [whatsappMode, setWhatsappMode] = useState("");
@@ -235,12 +234,6 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    fetchPatients()
-      .then((list) => setLiveQueue({ loading: false, patients: list.filter((p) => p.status === "En espera").sort(comparePriority) }))
-      .catch(() => setLiveQueue({ loading: false, patients: [], offline: true }));
-  }, []);
-
-  useEffect(() => {
     if (!user || user.role === "ADMIN") return;
     fetchSymptoms()
       .then((rows) => {
@@ -321,18 +314,18 @@ export default function App() {
     setLoginError("");
     try {
       warmupServices();
-      const queuePromise = fetchPatients().catch(() => null);
       const session = await loginRequest({ username, password });
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      setQueueLoading(true);
       setUser(session);
-      queuePromise.then((list) => {
-        if (list) {
-          setPatients(mergeServerList(list));
-          setLiveQueue({ loading: false, patients: list.filter((p) => p.status === "En espera").sort(comparePriority) });
-        }
-        setQueueLoading(false);
-      });
+      if (session.role !== "ADMIN") {
+        setQueueLoading(true);
+        fetchPatients()
+          .then((list) => {
+            setPatients(mergeServerList(list));
+            setQueueLoading(false);
+          })
+          .catch(() => setQueueLoading(false));
+      }
     } catch (error) {
       setLoginError(error.message || "Usuario o contraseña incorrectos.");
     } finally {
@@ -353,7 +346,6 @@ export default function App() {
     setResult(null);
     setForm(EMPTY_FORM);
     setView("queue");
-    setLiveQueue({ loading: true, patients: [] });
     setMenuOpen(false);
   }
 
@@ -1090,7 +1082,7 @@ export default function App() {
           </section>
         )}
 
-        {view === "stats" && <StatsView conditionLabel={conditionLabel} />}
+        {view === "stats" && <StatsView conditionLabel={conditionLabel} patients={patients} />}
 
         {view === "report" && <ShiftReport patients={patients} conditionLabel={conditionLabel} user={user} />}
 
