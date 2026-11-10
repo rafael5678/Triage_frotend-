@@ -56,9 +56,9 @@ export function explainWhy(patient) {
   const n = ageNorms(age, { pregnant: Boolean(patient.pregnant), weeks: patient.gestationWeeks });
   const reasons = [];
 
-  if (fine && score >= 42) {
+  if (fine) {
     reasons.push(`Los signos medidos están en rango para ${n.label}: no son la razón de este puntaje.`);
-    reasons.push(`El puntaje sale sobre todo por el motivo (“${motif}”)${hasPhoto ? " y por la foto" : ""}.`);
+    reasons.push(`Claude lee el relato${hasPhoto ? " y la foto" : ""}, no el número del menú (“${motif}”).`);
   } else {
     if (spo2 > 100) reasons.push(`Pusieron oxígeno ${spo2}. A los ${n.label} lo habitual es 95 a 100. Se guarda el número que midieron.`);
     else if (spo2 < 90) reasons.push(`El oxígeno en la sangre está muy bajo (${spo2}%). Lo normal a los ${n.label} es 95 a 100. Eso sube mucho el puntaje.`);
@@ -106,8 +106,8 @@ export function explainWhy(patient) {
     if (!merged.includes(r)) merged.push(r);
   });
 
-  const honestLead = fine && score >= 42
-    ? `El puntaje ${score} sale por el motivo (“${motif}”)${hasPhoto ? " y por la foto" : ""}, no por los signos: oxígeno, pulso, presión y respiración están en rango.`
+  const honestLead = fine
+    ? `El puntaje ${score} sale de lo que cuenta el paciente${hasPhoto ? " y de la foto" : ""}, no del menú (“${motif}”) ni de signos que están en rango.`
     : null;
   const measuredDanger = danger.length && !estimated.size;
   const rawLead = patient.dangerLead;
@@ -120,11 +120,11 @@ export function explainWhy(patient) {
 
   const drivers = [
     fine
-      ? "Signos: en rango para la edad. No explican un puntaje alto."
+      ? "Signos: en rango para la edad. No explican el puntaje."
       : "Signos: hay números fuera de rango; esos sí mueven el puntaje.",
     condition
-      ? `Motivo: “${condition.label}”${patient.reason ? ` — ${patient.reason}` : ""}.`
-      : "Motivo: no indicado.",
+      ? `Relato: ${patient.reason || "sin texto"}. El menú (“${condition.label}”) es solo una pista.`
+      : "Relato: no indicado.",
     hasPhoto ? `Foto: ${patient.photoFindings}` : "Foto: no hay.",
   ];
 

@@ -20,7 +20,7 @@ export function conditionLabel(id) {
   return findSymptom(id)?.label || "Motivo no indicado";
 }
 
-const EMERGENCY_MOTIFS = new Set(["paro", "avc", "sca", "trauma", "disnea", "sepsis", "anafilaxia", "hemorragia", "convulsion"]);
+const EMERGENCY_MOTIFS = new Set(["paro", "avc", "sca", "disnea", "sepsis", "anafilaxia", "hemorragia", "convulsion"]);
 
 function measuredCrisis(row) {
   if (!row) return false;
