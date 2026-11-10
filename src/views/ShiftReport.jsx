@@ -2,99 +2,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { LEVELS } from "../models/levels";
 import { waitInfo } from "../models/notice";
+import {
+  SHIFTS,
+  arrivedMs,
+  buildShiftCsv,
+  buildShiftReport,
+  calendarTodayIso,
+  clampReportDate,
+  currentShift,
+  hhmm,
+  minutesToCare,
+  todayIso,
+  windowOf,
+} from "../models/shiftReport";
 import { fetchPatients } from "../services/api";
 
-const SHIFTS = [
-  { id: "manana", label: "Mañana (7:00–13:00)", from: 7, hours: 6 },
-  { id: "tarde", label: "Tarde (13:00–19:00)", from: 13, hours: 6 },
-  { id: "noche", label: "Noche (19:00–7:00)", from: 19, hours: 12 },
-  { id: "dia", label: "Día completo (24 h)", from: 0, hours: 24 },
-];
-
-function currentShift(now = new Date()) {
-  const h = now.getHours();
-  if (h >= 7 && h < 13) return "manana";
-  if (h >= 13 && h < 19) return "tarde";
-  return "noche";
-}
-
-function padIso(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function calendarTodayIso(now = new Date()) {
-  return padIso(now);
-}
-
-function todayIso(now = new Date()) {
-  const d = new Date(now);
-  if (d.getHours() < 7) d.setDate(d.getDate() - 1);
-  return padIso(d);
-}
-
-function clampReportDate(value, now = new Date()) {
-  const max = calendarTodayIso(now);
-  if (!value || value > max) return max;
-  return value;
-}
-
-function windowOf(shiftId, dateIso) {
-  const shift = SHIFTS.find((s) => s.id === shiftId);
-  const [y, m, d] = dateIso.split("-").map(Number);
-  const start = new Date(y, m - 1, d, shift.from, 0, 0).getTime();
-  return { start, end: start + shift.hours * 3600000, shift };
-}
-
-function dayWindow(dateIso) {
-  const [y, m, d] = dateIso.split("-").map(Number);
-  const start = new Date(y, m - 1, d, 7, 0, 0).getTime();
-  return { start, end: start + 24 * 3600000 };
-}
-
-function minutesToCare(p) {
-  if (!p.careStartedAt || !p.arrivedAt) return null;
-  return Math.max(0, Math.round((p.careStartedAt - p.arrivedAt) / 60000));
-}
-
-function levelKeyOf(p) {
-  if (p.triageLevel && LEVELS[p.triageLevel]) return p.triageLevel;
-  const chip = p.priority?.chip;
-  return Object.keys(LEVELS).find((k) => LEVELS[k].chip === chip) || p.triageLevel;
-}
-
-function percentile(sorted, p) {
-  if (!sorted.length) return null;
-  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
-  return sorted[idx];
-}
-
-function arrivedMs(p) {
-  const n = Number(p.arrivedAt || p.evaluatedAt);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function stillInHospital(p) {
-  return p.status === "En espera" || p.status === "En atención" || p.statusCode === "EN_ESPERA" || p.statusCode === "EN_ATENCION";
-}
-
-function hhmm(ms) {
-  return ms ? new Date(ms).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" }) : "";
-}
-
-function count(list, keyOf) {
-  return list.reduce((acc, item) => {
-    const k = keyOf(item);
-    if (k) acc[k] = (acc[k] || 0) + 1;
-    return acc;
-  }, {});
-}
-
-function csvCell(value) {
-  const s = value == null ? "" : String(value);
-  return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-/** Resumen del shift para la entrega de shift y el indicador de oportunidad en urgencias. */
 export default function ShiftReport({ patients, conditionLabel, user }) {
   const [shiftId, setShiftId] = useState(currentShift());
   const [date, setDate] = useState(() => clampReportDate(todayIso()));
@@ -107,87 +29,28 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
     fetchPatients().then(setLivePatients).catch(() => {});
   }, []);
 
-  const report = useMemo(() => {
-    const day = dayWindow(date);
-    const source = livePatients || [];
-    const rows = source
-      .filter((p) => {
-        const at = arrivedMs(p);
-        return at >= start && at < end;
-      })
-      .sort((a, b) => arrivedMs(a) - arrivedMs(b));
-    const todayRows = source
-      .filter((p) => {
-        const at = arrivedMs(p);
-        return at >= day.start && at < day.end;
-      })
-      .sort((a, b) => arrivedMs(a) - arrivedMs(b));
-    const carryover = source
-      .filter((p) => stillInHospital(p) && arrivedMs(p) && arrivedMs(p) < start)
-      .sort((a, b) => arrivedMs(a) - arrivedMs(b));
-    const now = Date.now();
-    const startedCare = rows.filter((p) => p.careStartedAt);
-    const finished = rows.filter((p) => p.status === "Atendido" || p.statusCode === "ATENDIDO");
-    const toCare = startedCare.map(minutesToCare).filter((n) => n != null);
-    const onTime = startedCare.filter((p) => {
-      const minutes = minutesToCare(p);
-      if (minutes == null) return false;
-      return minutes <= (p.maxWaitMinutes ?? 30);
-    }).length;
-    const stillWaiting = rows.filter((p) => p.status === "En espera");
-    const overdue = stillWaiting.filter((p) => waitInfo(p, now).overdue);
-    const absent = stillWaiting.filter((p) => p.present === false);
-    const avg = toCare.length ? Math.round(toCare.reduce((a, b) => a + b, 0) / toCare.length) : null;
-    const sorted = [...toCare].sort((a, b) => a - b);
-    const slowest = sorted.length ? sorted[sorted.length - 1] : null;
-    const p90 = toCare.length >= 5 ? percentile(sorted, 90) : slowest;
-    return {
-      rows,
-      todayRows,
-      carryover,
-      startedCare,
-      finished,
-      avg,
-      p90,
-      slowest,
-      useP90: toCare.length >= 5,
-      onTime,
-      onTimePercent: startedCare.length ? Math.round((onTime / startedCare.length) * 100) : null,
-      stillWaiting,
-      overdue,
-      absent,
-      byLevel: count(rows, levelKeyOf),
-      byArea: count(rows, (p) => p.destinationArea),
-      codes: count(rows, (p) => (p.destinationCode || "").split(" · ").find((c) => c.startsWith("Código"))),
-      notified: count(rows, (p) => p.notifiedChannel),
-      pregnant: rows.filter((p) => p.pregnant).length,
-      children: rows.filter((p) => Number(p.age) < 14).length,
-      cancelled: rows.filter((p) => p.status === "Cancelado").length,
-      estimated: rows.filter((p) => p.estimatedFields?.length).length,
-    };
-  }, [livePatients, start, end, date]);
+  const report = useMemo(
+    () => buildShiftReport(livePatients || [], { start, end, date }),
+    [livePatients, start, end, date]
+  );
 
   function downloadCsv() {
-    const header = ["Llegada", "Nombre", "Documento", "Edad", "Sexo", "Motivo", "Puntaje", "Nivel", "Área", "Código",
-      "Estado", "Inicio atención", "Minutos hasta atención", "Meta (min)", "Tomó los signos", "Presente", "Aviso", "Teléfono"];
-    const lines = report.rows.map((p) => [
-      new Date(p.arrivedAt).toLocaleString("es-CO"),
-      p.name, p.document, p.age, p.sex, conditionLabel(p.conditionId), p.score.toFixed(1),
-      LEVELS[p.triageLevel]?.chip || p.triageLevel, p.destinationArea, p.destinationCode, p.status,
-      p.careStartedAt ? new Date(p.careStartedAt).toLocaleString("es-CO") : "",
-      p.careStartedAt ? Math.round((p.careStartedAt - p.arrivedAt) / 60000) : "",
-      p.maxWaitMinutes ?? "", p.evaluatedBy, p.present ? "Sí" : "No", p.notifiedChannel, p.phone,
-    ].map(csvCell).join(";"));
-    const blob = new Blob([`\uFEFF${[header.join(";"), ...lines].join("\n")}`], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob(
+      [buildShiftCsv(report, { shift, date, user, conditionLabel })],
+      { type: "text/csv;charset=utf-8" }
+    );
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `reporte-turno-${date}-${shiftId}.csv`;
+    a.download = `reporte-turno-completo-${date}-${shiftId}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   const levelKeys = Object.keys(LEVELS);
+  const when = new Date(start).toLocaleDateString("es-CO", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
 
   return (
     <section className="page report">
@@ -197,8 +60,8 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
           <p className="sub">Para la entrega de turno: quién llegó, qué tan rápido se atendió y quién sigue esperando.</p>
         </div>
         <div className="row-btns">
-          <button className="ghost" onClick={downloadCsv} disabled={!report.rows.length}>Descargar CSV</button>
-          <button className="btn" onClick={() => window.print()}>Imprimir</button>
+          <button className="ghost" onClick={downloadCsv}>Descargar CSV</button>
+          <button className="btn" onClick={() => window.print()}>Imprimir / PDF</button>
         </div>
       </div>
       <div className="report-filters no-print">
@@ -228,8 +91,20 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
       </p>
 
       <header className="print-only">
-        <h1>Urgencias · reporte del turno</h1>
-        <p>{shift.label} · {new Date(start).toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · generado por {user?.displayName} a las {hhmm(Date.now())}</p>
+        <h1>Urgencias · reporte del turno (completo)</h1>
+        <p>
+          {shift.label} · {when}
+          {" "}· generado por {user?.displayName} a las {hhmm(Date.now())}
+        </p>
+        <p>
+          Ingresos del turno: {report.rows.length}
+          {" · "}día 7:00–7:00: {report.todayRows.length}
+          {" · "}pasaron a atención: {report.startedCare.length}
+          {" · "}promedio a atención: {report.avg == null ? "—" : `${report.avg} min`}
+          {" · "}más tardó / p90: {report.p90 == null ? "—" : `${report.p90} min`}
+          {" · "}dentro de meta: {report.startedCare.length ? `${report.onTime} de ${report.startedCare.length}` : "—"}
+          {" · "}esperando · vencidos: {report.stillWaiting.length} · {report.overdue.length}
+        </p>
       </header>
 
       <div className="stats">
@@ -292,19 +167,42 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
         {report.rows.length === 0 && <p className="muted">No hubo ingresos en este turno.</p>}
         {report.rows.length > 0 && (
           <table>
-            <thead><tr><th>Llegó</th><th>Paciente</th><th>Nivel</th><th>Área / código</th><th>Atención</th><th>Estado</th><th>Signos</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Llegó</th>
+                <th>Paciente</th>
+                <th>Documento</th>
+                <th>Nivel</th>
+                <th>Área / código</th>
+                <th>Atención</th>
+                <th>Estado</th>
+                <th>Teléfono</th>
+                <th>Signos</th>
+              </tr>
+            </thead>
             <tbody>
               {report.rows.map((p) => {
                 const minutes = minutesToCare(p);
                 const late = minutes != null && minutes > (p.maxWaitMinutes ?? 30);
+                const chip = p.priority?.chip || LEVELS[p.triageLevel]?.chip;
+                const tone = p.priority?.tone || LEVELS[p.triageLevel]?.tone || "v";
+                const score = Number.isFinite(Number(p.score)) ? Number(p.score).toFixed(1) : "—";
                 return (
                   <tr key={p.id}>
-                    <td>{hhmm(p.arrivedAt)}</td>
-                    <td><b>{p.name}</b><div className="muted">{p.age} años · {conditionLabel(p.conditionId)}{p.pregnant ? " · embarazo" : ""}</div></td>
-                    <td><span className={`chip ${p.priority.tone}`}>{p.priority.chip}</span> {p.score.toFixed(1)}</td>
+                    <td>{hhmm(p.arrivedAt || p.evaluatedAt)}</td>
+                    <td>
+                      <b>{p.name}</b>
+                      <div className="muted">{p.age} años · {conditionLabel(p.conditionId)}{p.pregnant ? " · embarazo" : ""}</div>
+                    </td>
+                    <td className="document">{p.document || "—"}</td>
+                    <td><span className={`chip ${tone}`}>{chip}</span> {score}</td>
                     <td>{p.destinationArea}{p.destinationCode && <div className="muted">{p.destinationCode}</div>}</td>
-                    <td className={late ? "late" : ""}>{minutes == null ? "—" : `${hhmm(p.careStartedAt)} · ${minutes} min`}{late && <div className="muted">pasó la meta de {p.maxWaitMinutes ?? 30}</div>}</td>
+                    <td className={late ? "late" : ""}>
+                      {minutes == null ? "—" : `${hhmm(p.careStartedAt)} · ${minutes} min`}
+                      {late && <div className="muted">pasó la meta de {p.maxWaitMinutes ?? 30}</div>}
+                    </td>
                     <td>{p.status}{p.notifiedChannel && <div className="muted">avisado ({p.notifiedChannel === "WHATSAPP" ? "WhatsApp" : "manual"})</div>}</td>
+                    <td>{p.phone || "—"}</td>
                     <td>{p.evaluatedBy || "—"}</td>
                   </tr>
                 );
@@ -321,7 +219,11 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
           <ul className="bullets">
             {report.carryover.map((p) => (
               <li key={p.id}>
-                <b>{p.name}</b> · llegó {hhmm(arrivedMs(p))} · {p.status} · {LEVELS[p.triageLevel]?.chip || p.priority?.chip}
+                <b>{p.name}</b>
+                {p.document ? ` · ${p.document}` : ""}
+                {" · llegó "}{hhmm(arrivedMs(p))}
+                {" · "}{p.status}
+                {" · "}{LEVELS[p.triageLevel]?.chip || p.priority?.chip}
               </li>
             ))}
           </ul>

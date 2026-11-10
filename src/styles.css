@@ -672,11 +672,16 @@ tr.clickable:hover, tr.sel { background: var(--sand); }
 td.late { color: var(--i); font-weight: 700; }
 .print-only { display: none; }
 @media print {
-  .side, .bar, .toast, .no-print { display: none !important; }
-  .app, .stage { display: block; height: auto; overflow: visible; }
+  @page { size: A4 landscape; margin: 10mm; }
+  html, body, #root, .app, .stage { height: auto !important; overflow: visible !important; }
+  .side, .bar, .toast, .no-print, .menu-btn { display: none !important; }
+  .app { display: block; }
   .print-only { display: block; }
   .page { padding: 0; }
-  .sheet, .stats article { break-inside: avoid; border-color: #ccc; }
+  .sheet, .stats article, .report table tr { break-inside: avoid; border-color: #ccc; }
+  .table-wrap, .hour-chart-scroll { overflow: visible !important; }
+  .report table { font-size: 11px; width: 100%; }
+  .report .split { display: grid; grid-template-columns: 1fr 1fr; }
   body { background: #fff; }
 }
 
