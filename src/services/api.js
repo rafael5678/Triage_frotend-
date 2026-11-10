@@ -41,7 +41,7 @@ const EVAL_URL = import.meta.env.VITE_EVAL_URL || (import.meta.env.DEV ? "http:/
 const QUEUE_URL = import.meta.env.VITE_QUEUE_URL || (import.meta.env.DEV ? "http://localhost:8083" : "");
 const AI_URL = import.meta.env.VITE_AI_URL || (import.meta.env.DEV ? "http://localhost:8084" : "");
 
-async function request(base, path, options = {}, timeoutMs = 60000) {
+async function request(base, path, options = {}, timeoutMs = 90000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const hasBody = options.body != null && options.body !== "";

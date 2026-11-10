@@ -20,6 +20,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
   const story = form.story || "";
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState(null);
+  const [error, setError] = useState("");
 
   async function onPhoto(event) {
     const file = event.target.files?.[0];
@@ -38,6 +39,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
       return;
     }
     setBusy(true);
+    setError("");
     try {
       const known = {};
       FILLABLE.forEach((key) => {
@@ -51,7 +53,7 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
         known,
         comorbidityOptions: comorbidities.map((c) => ({ id: c.id, label: c.label })),
       });
-      if (!s?.active) throw new Error("No se pudo completar el caso. Llene el formulario a mano o intente en un momento.");
+      if (!s?.active) throw new Error("La IA no respondió. Espere unos segundos y pulse otra vez Completar el caso.");
 
       const patch = {};
       const estimated = new Set(form.estimatedFields || []);
@@ -81,12 +83,17 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
       if (patch.age) {
         Object.assign(patch, refreshEstimatedRest({ ...form, ...patch }, patch.age));
       }
+      const filled = Boolean(patch.conditionId || patch.reason || patch.age || s.notes?.length || s.photoFindings);
+      if (!filled && !FILLABLE.some((key) => !isEmpty(patch[key]))) {
+        throw new Error("La IA no armó el caso. Pulse Completar el caso otra vez, o elija el motivo a mano.");
+      }
       onApply(patch);
       setNotes({ notes: s.notes || [], photoFindings: s.photoFindings, estimated: patch.estimatedFields });
       flash(estimated.size
         ? "Se armó el motivo. Los signos de reposo son guía: si puede, póngalos del oxímetro y el tensiómetro."
         : "Se armó el formulario. Revise cada dato antes de calcular.");
     } catch (e) {
+      setError(e.message);
       flash(e.message);
     } finally {
       setBusy(false);
@@ -117,9 +124,11 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
           </span>
         )}
         <button type="button" className="btn" onClick={fill} disabled={busy}>
-          {busy ? "Leyendo el caso…" : "Completar el caso"}
+          {busy ? "Leyendo relato y foto…" : "Completar el caso"}
         </button>
       </div>
+      {busy && <p className="hint">Claude está leyendo el caso. Puede tardar 10 a 20 segundos si hay foto.</p>}
+      {error && <p className="form-err">{error}</p>}
       {notes && (
         <div className="ai-notes">
           {notes.estimated?.length > 0 && (
