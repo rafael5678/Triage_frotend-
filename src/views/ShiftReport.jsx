@@ -18,10 +18,24 @@ function currentShift(now = new Date()) {
   return "noche";
 }
 
+function padIso(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function calendarTodayIso(now = new Date()) {
+  return padIso(now);
+}
+
 function todayIso(now = new Date()) {
   const d = new Date(now);
   if (d.getHours() < 7) d.setDate(d.getDate() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return padIso(d);
+}
+
+function clampReportDate(value, now = new Date()) {
+  const max = calendarTodayIso(now);
+  if (!value || value > max) return max;
+  return value;
 }
 
 function windowOf(shiftId, dateIso) {
@@ -83,7 +97,8 @@ function csvCell(value) {
 /** Resumen del shift para la entrega de shift y el indicador de oportunidad en urgencias. */
 export default function ShiftReport({ patients, conditionLabel, user }) {
   const [shiftId, setShiftId] = useState(currentShift());
-  const [date, setDate] = useState(todayIso());
+  const [date, setDate] = useState(() => clampReportDate(todayIso()));
+  const maxDate = calendarTodayIso();
   const [livePatients, setLivePatients] = useState(patients);
   const { start, end, shift } = windowOf(shiftId, date);
 
@@ -192,7 +207,14 @@ export default function ShiftReport({ patients, conditionLabel, user }) {
             {SHIFTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </label>
-        <label>Fecha de inicio<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+        <label>Fecha de inicio
+          <input
+            type="date"
+            value={date}
+            max={maxDate}
+            onChange={(e) => setDate(clampReportDate(e.target.value))}
+          />
+        </label>
       </div>
       <p className="sub no-print">
         Este turno ({shift.label}): <b>{report.rows.length}</b> ingreso{report.rows.length === 1 ? "" : "s"}.
