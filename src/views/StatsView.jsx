@@ -58,8 +58,15 @@ export default function StatsView({ conditionLabel = (id) => id, patients = null
     return undefined;
   }, [patients, loadingList]);
 
-  const hours = Object.entries(stats?.arrivalsByHour || {});
-  const maxHour = Math.max(1, ...hours.map(([, v]) => v));
+  const hours = stats?.arrivalsLast24 || [];
+  const maxHour = Math.max(1, ...hours.map((h) => h.count));
+  const hourTotal = hours.reduce((sum, h) => sum + h.count, 0);
+  const dayBands = [];
+  for (const h of hours) {
+    const last = dayBands[dayBands.length - 1];
+    if (last && last.dateKey === h.dateKey) last.span += 1;
+    else dayBands.push({ dateKey: h.dateKey, label: h.dayLabel, span: 1 });
+  }
   const busy = loading || (loadingList && !stats);
 
   return (
@@ -108,16 +115,38 @@ export default function StatsView({ conditionLabel = (id) => id, patients = null
               <Bars data={stats.byCondition} labelOf={conditionLabel} empty="Sin motivos aún." />
             </div>
           </div>
-          <div className="sheet" style={{ marginTop: 16 }}>
-            <h3>Ingresos por hora (últimas 24 h)</h3>
-            <div className="vbars">
-              {hours.map(([hour, count]) => (
-                <div key={hour} className="vbar" title={`${hour}: ${count}`}>
-                  <i style={{ height: `${(count / maxHour) * 100}%` }} />
-                  <small>{hour.slice(0, 2)}</small>
+          <div className="sheet hour-chart" style={{ marginTop: 16 }}>
+            <h3>Ingresos por hora · últimas 24 h</h3>
+            <p className="sub">
+              Cada barra es <b>una hora en Colombia</b> (de esa hora a :59).
+              {" "}La barra más alta es cuando más gente llegó.
+              {" "}En estas 24 h: <b>{hourTotal}</b> ingreso{hourTotal === 1 ? "" : "s"}.
+            </p>
+            <div className="hour-chart-scroll">
+              <div className="hour-chart-inner">
+                <div className="hour-day-row">
+                  {dayBands.map((band) => (
+                    <div key={band.dateKey} className="hour-day-band" style={{ gridColumn: `span ${band.span}` }}>
+                      {band.label}
+                    </div>
+                  ))}
                 </div>
-              ))}
+                <div className="hour-bars">
+                  {hours.map((h) => (
+                    <div
+                      key={h.key}
+                      className={`hour-col ${h.count ? "has-in" : ""}`}
+                      title={`${h.dayLabel}, ${h.timeLabel} a ${h.timeLabel.replace(":00", ":59")}: ${h.count} ingreso${h.count === 1 ? "" : "s"}`}
+                    >
+                      <span className="hour-n">{h.count ? h.count : ""}</span>
+                      <i style={{ height: `${Math.max(h.count ? 8 : 2, (h.count / maxHour) * 100)}%` }} />
+                      <small>{h.timeLabel}</small>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
+            <p className="muted hour-legend">Ejemplo: <b>01:00</b> son las personas que llegaron entre la 1:00 y la 1:59 de esa madrugada.</p>
           </div>
         </>
       )}

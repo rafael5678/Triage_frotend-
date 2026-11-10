@@ -21,9 +21,52 @@ function round1(value) {
   return Math.round(value * 10) / 10;
 }
 
-function hourLabel(ms) {
-  const hour = new Date(ms).toLocaleTimeString("es-CO", { hour: "2-digit", hour12: false, timeZone: "America/Bogota" });
-  return `${hour.slice(0, 2)}:00`;
+const BOGOTA = "America/Bogota";
+
+function bogotaParts(ms) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: BOGOTA,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date(ms)).filter((p) => p.type !== "literal").map((p) => [p.type, p.value])
+  );
+  const hour = String(parts.hour).padStart(2, "0");
+  return {
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+    hour,
+    dateKey: `${parts.year}-${parts.month}-${parts.day}`,
+    key: `${parts.year}-${parts.month}-${parts.day}T${hour}`,
+  };
+}
+
+function hourBucket(ms, nowMs) {
+  const at = bogotaParts(ms);
+  const today = bogotaParts(nowMs).dateKey;
+  const yesterday = bogotaParts(nowMs - 24 * 3600000).dateKey;
+  let dayTag = at.dateKey;
+  if (at.dateKey === today) dayTag = "Hoy";
+  else if (at.dateKey === yesterday) dayTag = "Ayer";
+  const pretty = new Date(ms).toLocaleDateString("es-CO", {
+    timeZone: BOGOTA,
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+  });
+  return {
+    key: at.key,
+    dateKey: at.dateKey,
+    timeLabel: `${at.hour}:00`,
+    dayTag,
+    dayLabel: `${dayTag} · ${pretty}`,
+    startMs: ms,
+    count: 0,
+  };
 }
 
 /** Same numbers the statistics screen shows, from the live patient list in the database. */
@@ -42,9 +85,12 @@ export function statsFromPatients(rows, now = Date.now()) {
 
   const end = new Date(now);
   end.setMinutes(0, 0, 0);
+  const arrivalsLast24 = [];
   const arrivalsByHour = {};
   for (let i = 23; i >= 0; i -= 1) {
-    arrivalsByHour[hourLabel(end.getTime() - i * 3600000)] = 0;
+    const bucket = hourBucket(end.getTime() - i * 3600000, now);
+    arrivalsLast24.push(bucket);
+    arrivalsByHour[bucket.key] = bucket;
   }
 
   for (const patient of all) {
@@ -73,8 +119,8 @@ export function statsFromPatients(rows, now = Date.now()) {
     }
     const arrived = patient.arrivedAt || patient.evaluatedAt;
     if (arrived && now - arrived < 24 * 3600000) {
-      const label = hourLabel(arrived);
-      if (label in arrivalsByHour) arrivalsByHour[label] += 1;
+      const bucket = arrivalsByHour[bogotaParts(arrived).key];
+      if (bucket) bucket.count += 1;
     }
   }
 
@@ -98,6 +144,7 @@ export function statsFromPatients(rows, now = Date.now()) {
     byArea: sortedAreas,
     byStatus,
     byCondition: topConditions,
-    arrivalsByHour,
+    arrivalsByHour: Object.fromEntries(arrivalsLast24.map((b) => [b.timeLabel, b.count])),
+    arrivalsLast24,
   };
 }

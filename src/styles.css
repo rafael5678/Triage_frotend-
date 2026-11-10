@@ -482,6 +482,68 @@ tr.account-off td { color: var(--muted); }
 .vbar { display: grid; grid-template-rows: 1fr auto; height: 100%; text-align: center; }
 .vbar i { align-self: end; background: var(--gold); border-radius: 6px 6px 0 0; min-height: 2px; display: block; }
 .vbar small { font-size: 10px; color: var(--muted); }
+.hour-chart h3 { margin-bottom: 4px; }
+.hour-chart-scroll { overflow-x: auto; margin-top: 12px; }
+.hour-chart-inner { min-width: 760px; }
+.hour-day-row {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.hour-day-band {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--teal);
+  border-bottom: 2px solid var(--gold-edge);
+  padding: 0 4px 6px;
+  text-transform: capitalize;
+}
+.hour-bars {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 4px;
+  align-items: end;
+  height: 168px;
+  padding-bottom: 28px;
+}
+.hour-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  height: 100%;
+  gap: 4px;
+  position: relative;
+}
+.hour-col i {
+  width: 70%;
+  max-width: 18px;
+  background: var(--gold);
+  border-radius: 6px 6px 0 0;
+  min-height: 2px;
+  display: block;
+}
+.hour-col.has-in i { background: var(--teal); }
+.hour-n {
+  font-size: 11px;
+  font-weight: 800;
+  font-family: Fraunces, Georgia, serif;
+  color: var(--title);
+  min-height: 14px;
+  line-height: 1;
+}
+.hour-col small {
+  position: absolute;
+  bottom: -22px;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  transform: rotate(-40deg);
+  transform-origin: top left;
+  left: 30%;
+}
+.hour-legend { margin: 18px 0 0; font-size: 13px; }
 
 /* Enlaces a la pantalla de sala */
 .board-link { margin-top: 18px; font-size: 13px; }
