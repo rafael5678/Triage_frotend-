@@ -106,16 +106,17 @@ export function explainWhy(patient) {
     if (!merged.includes(r)) merged.push(r);
   });
 
+  const catalogLead = /sale por el motivo|puntaje alto sale/i.test(String(patient.dangerLead || ""));
   const honestLead = fine
-    ? `El puntaje ${score} sale de lo que cuenta el paciente${hasPhoto ? " y de la foto" : ""}, no del menú (“${motif}”) ni de signos que están en rango.`
+    ? `El puntaje ${score} sale de lo que cuenta el paciente${hasPhoto ? " y de lo que se ve en la foto" : ""}. Los signos están en rango; el menú no fija el número.`
     : null;
   const measuredDanger = danger.length && !estimated.size;
   const rawLead = patient.dangerLead;
-  const dangerLead = (rawLead && !blamesFineSigns(rawLead))
+  const dangerLead = (rawLead && !blamesFineSigns(rawLead) && !catalogLead)
     ? rawLead
     : (honestLead
       || (measuredDanger ? `Está grave porque ${danger.join(", ")}.` : (estimated.size
-        ? "Varios signos no se midieron: el puntaje sigue sobre todo el motivo de consulta, no un shock inventado."
+        ? "Varios signos no se midieron: el puntaje sigue el relato y lo que sí se midió, no un shock inventado."
         : priority.meaning)));
 
   const drivers = [
