@@ -935,8 +935,14 @@ export default function App() {
                     <Chip priority={selected.priority} />
                     <p className="ticket-xl">{selected.ticket || ticketCode(selected)}</p>
                     <h2>{selected.name}{isElderly(selected) && <span className="elder">65+</span>}</h2>
+                    <p className="muted">{selectedExplain.dangerLead}</p>
                     <p className="muted">{selectedExplain.meaning}</p>
                     <p className="scoreline">Puntaje <b>{Number(selected.score).toFixed(1)}</b> / 100</p>
+                    {selectedExplain.drivers?.length > 0 && (
+                      <ul className="why-list">
+                        {selectedExplain.drivers.map((d) => <li key={d}>{d}</li>)}
+                      </ul>
+                    )}
                     <p className="muted">{waitSummary(selected.score, waiting).text}</p>
                     <DestinationCard patient={selected} compact />
                     <EstimatedWarning fields={selected.estimatedFields} />
@@ -1148,6 +1154,11 @@ export default function App() {
                 <p className="danger-lead">{result.explanation.dangerLead}</p>
                 <p>{result.explanation.meaning}</p>
                 <p>{result.explanation.whyQueue}</p>
+                {result.explanation.drivers?.length > 0 && (
+                  <ul className="why-list">
+                    {result.explanation.drivers.map((d) => <li key={d}>{d}</li>)}
+                  </ul>
+                )}
                 <p>{waitSummary(result.score, waiting).text}</p>
               </div>
               <DestinationCard patient={result} />
