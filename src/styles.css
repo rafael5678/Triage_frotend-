@@ -563,7 +563,7 @@ tr.account-off td { color: var(--muted); }
 }
 .hour-legend { margin: 18px 0 0; font-size: 13px; }
 
-/* Enlaces a la pantalla de sala */
+/* Links to the waiting-room screen */
 .board-link { margin-top: 18px; font-size: 13px; }
 .board-link a, .side-link { color: #e8c37a; }
 .side-link { padding: 11px 12px; font-size: 14px; text-decoration: none; }

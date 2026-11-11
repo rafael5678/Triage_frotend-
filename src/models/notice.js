@@ -1,10 +1,10 @@
 /** notice: staff UI module. User-facing copy stays in Spanish. */
 const DEFAULT_MAX_WAIT = 30;
-/** Igual que el backend: avisar si quedan 10 minutos o menos, o si está entre los 2 primeros. */
+/** Same as the backend: notify if 10 minutes or less remain, or if they are in the first two places. */
 export const NOTICE_LEAD_MINUTES = 10;
 export const NOTICE_POSITION_LEAD = 2;
 
-/** Cuánto lleva waitndo from que arrived y cuánto le queda de su tiempo máximo (negativo = vencido). */
+/** Minutes waited since arrival and minutes left before the protocol max (negative = overdue). */
 export function waitInfo(patient, now = Date.now()) {
   const start = patient.arrivedAt || patient.evaluatedAt || now;
   const waited = Math.max(0, Math.floor((now - start) / 60000));
@@ -38,7 +38,7 @@ function clock(patient) {
   return new Date(at).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
 }
 
-/** Mismo texto que manda el notice automático del servidor. */
+/** Same wording the server uses for the automatic notice. */
 export function noticeMessage(patient, position, now = Date.now()) {
   const name = firstName(patient.name);
   const ticket = ticketOf(patient);
@@ -65,7 +65,7 @@ function localTen(raw) {
 export function isValidWhatsApp(raw) {
   if (!String(raw || "").trim()) return false;
   const ten = localTen(raw);
-  // En Colombia el móvil es 3 + 9 dígitos (300, 310, 312, 315, 316, 318, 320, 350…).
+  // Colombian mobiles are 3 + 9 digits (300, 310, 312, 315, 316, 318, 320, 350…).
   if (ten.length !== 10 || !/^3[0-5]/.test(ten)) return false;
   if (/^(\d)\1{9}$/.test(ten)) return false;
   return true;
@@ -83,7 +83,7 @@ export function phoneError(raw) {
   return "";
 }
 
-/** mobile colombiano válido → 57 + 10 dígitos. */
+/** Valid Colombian mobile → 57 + 10 digits. */
 export function normalizePhone(raw) {
   if (!isValidWhatsApp(raw)) return "";
   return `57${localTen(raw)}`;

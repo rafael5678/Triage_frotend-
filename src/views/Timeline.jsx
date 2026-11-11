@@ -14,7 +14,7 @@ function day(ms) {
   return new Date(ms).toLocaleDateString("es-CO", { day: "numeric", month: "short" });
 }
 
-/** Qué cambió entre dos mediciones, en palabras. */
+/** What changed between two measurements, in words. */
 function changes(prev, next) {
   if (!prev) return [];
   const out = [];
@@ -58,7 +58,7 @@ function Chart({ rows }) {
   );
 }
 
-/** Línea de tiempo de una visita: cada vez que se midieron vitals, quién lo hizo y cómo cambió el score. */
+/** Visit timeline: each vitals take, who took them, and how the score moved. */
 export default function Timeline({ patientId, refreshKey }) {
   const [rows, setRows] = useState([]);
   const [state, setState] = useState("loading");

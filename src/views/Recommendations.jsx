@@ -38,7 +38,7 @@ function Block({ title, items, tone }) {
   );
 }
 
-/** Cada signo, en palabras: cómo se toma, qué es normal y por qué movió el score. */
+/** Each vital in words: how it is taken, what is normal, and why it moved the score. */
 export function VitalGuide({ patient }) {
   const rows = readVitals(patient);
   return (
@@ -72,7 +72,7 @@ function sameText(a, b) {
   return x.includes(y.slice(0, slice)) || y.includes(x.slice(0, slice));
 }
 
-/** Acciones y lectura clínica del caso (sin repetir la foto). */
+/** Actions and clinical reading of the case (without repeating the photo). */
 export default function Recommendations({ patient }) {
   const any = patient.immediateActions?.length || patient.testsToOrder?.length || patient.monitoring?.length
     || patient.redFlags?.length || patient.symptomExplanation || patient.photoFindings;

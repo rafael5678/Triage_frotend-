@@ -87,7 +87,7 @@ const EMPTY_FORM = {
   story: "",
 };
 
-/** Insignias de tiempo y presence que se ven en la queue. */
+/** Wait and presence badges shown in the queue. */
 function WaitBadges({ patient, now }) {
   const w = waitInfo(patient, now);
   return (
@@ -332,7 +332,7 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  /** queue en vivo: el servidor avisa when algo cambió y aquí se vuelve a pedir la lista. */
+  /** Live queue: reload the list when the server signals a change. */
   useEffect(() => {
     if (!user || user.role === "ADMIN") return undefined;
     const reload = () => {
@@ -716,7 +716,7 @@ export default function App() {
     }
   }
 
-  /** Abre WhatsApp con el mensaje listo y deja constancia del notice. */
+  /** Open WhatsApp with the notice text and mark the patient as notified. */
   async function sendWhatsapp(patient) {
     const link = whatsappLink(patient, positionOf(patient.id), now);
     if (!link) {

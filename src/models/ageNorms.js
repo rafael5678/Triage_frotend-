@@ -53,7 +53,7 @@ export function ageNorms(age, extra = {}) {
   return pregnant ? withPregnancy(base, weeks) : base;
 }
 
-/** En el embarazo el pulso y la respiración suben un poco; 140/90 ya no es “normal”, es alerta. */
+/** In pregnancy pulse and breathing rise a little; 140/90 is an alert, not “normal”. */
 function withPregnancy(n, weeks) {
   const late = Number.isFinite(weeks) && weeks >= 28;
   const hr = [Math.max(55, n.hr[0] - 5), n.hr[1] + (late ? 20 : 15)];
@@ -84,7 +84,7 @@ export function rangeText(pair, unit = "") {
   return `${pair[0]} a ${pair[1]}${unit ? ` ${unit}` : ""}`;
 }
 
-/** Oxígeno: 95–100 bien; 92–94 un poco bajo; 90–91 ya no es normal; 89 o menos crítico. */
+/** Oxygen: 95–100 ok; 92–94 a bit low; 90–91 not normal; 89 or below critical. */
 export function oxygenWord(value) {
   const v = Number(value);
   if (!Number.isFinite(v)) return { badge: "", ok: true, detail: "" };

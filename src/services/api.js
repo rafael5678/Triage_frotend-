@@ -310,7 +310,7 @@ export async function finishCare(id, status = "ATENDIDO") {
   return mapFromApi(await request(QUEUE_URL, `/api/v1/triage/care/${id}/status?status=${status}`, { method: "PATCH" }));
 }
 
-/** Todas las mediciones del patient, de la más antigua a la más reciente. */
+/** All vital-sign measurements for a patient, oldest first. */
 export async function fetchHistory(patientId) {
   const rows = await request(EVAL_URL, `/api/v1/triage/patients/${patientId}/history`);
   return (rows || []).map(mapFromApi);
@@ -341,8 +341,8 @@ export function warmupServices() {
 }
 
 /**
- * Escucha los cambios de la queue en vivo. onChange se llama when algo cambió (arrived alguien,
- * lo reevaluaron, pasó a care). Devuelve una función para dejar de escuchar.
+ * Live queue SSE. onChange runs when someone arrives, is reassessed, or moves to care.
+ * Returns an unsubscribe function.
  */
 export function subscribeEvents(onChange, onStatus = () => {}) {
   if (typeof EventSource === "undefined" || !QUEUE_URL) {
@@ -350,7 +350,7 @@ export function subscribeEvents(onChange, onStatus = () => {}) {
     return () => {};
   }
   let source = null;
-  // Una conexión abierta mantiene despiertos los servicios en Azure: se cierra si nadie mira la pestaña.
+  // An open EventSource keeps Azure replicas awake; it closes when the tab is hidden.
   const open = () => {
     if (source) return;
     source = new EventSource(`${QUEUE_URL}/api/v1/triage/events`);
@@ -388,7 +388,7 @@ export async function login(credentials) {
   });
 }
 
-/** La IA convierte el relato (y la foto) en el formulario. known son los datos que ya escribió el personal. */
+/** LLM fills the intake form from the story and optional photo. `known` is what staff already typed. */
 export async function intakeWithAi({ story, photo, known, comorbidityOptions }) {
   return request(AI_URL, "/api/v1/ia/intake", {
     method: "POST",

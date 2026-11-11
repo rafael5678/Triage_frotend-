@@ -4,7 +4,7 @@ import { explainField } from "../services/api";
 
 const cache = new Map();
 
-/** Botón "?" que le pide a la IA explicar un dato del formulario y lo que significa el valor escrito. */
+/** "?" control: asks the LLM to explain a form field and the value that was typed. */
 export default function FieldHelp({ field, value, context }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);

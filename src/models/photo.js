@@ -1,5 +1,5 @@
 /* English: identifiers in this file are English; on-screen copy stays Spanish. */
-/** Reduce la foto a máx. 1280 px y JPEG para que la IA la lea bien sin saturar la red. */
+/** Shrink the photo to at most 1280 px JPEG so the LLM can read it without saturating the network. */
 export function resizePhoto(file, maxSide = 1280, quality = 0.85) {
   return new Promise((resolve, reject) => {
     if (!file || !file.type?.startsWith("image/")) {

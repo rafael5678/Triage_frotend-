@@ -16,7 +16,7 @@ function speakTicket(ticket, area) {
   window.speechSynthesis.speak(u);
 }
 
-/** Pantalla de room (sin login): shift, área y tiempo, sin nombres. */
+/** Waiting-room screen (no login): shift, area and wait, no names. */
 export default function PublicBoard() {
   const [rows, setRows] = useState([]);
   const [status, setStatus] = useState("loading");
