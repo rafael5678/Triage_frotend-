@@ -93,12 +93,17 @@ export function explainWhy(patient) {
   else if (news >= 5) reasons.push(`NEWS2 = ${news}: hay que vigilar de cerca.`);
   else reasons.push(`NEWS2 = ${news} (0 es lo más estable en esa escala). Con signos en rango, NEWS2 bajo no explica un puntaje alto.`);
 
+  const spo2Measured = Number.isFinite(spo2) && spo2 > 0 && !estimated.has("spo2");
+  const hrMeasured = Number.isFinite(hr) && hr > 0 && !estimated.has("heartRate");
+  const sbpMeasured = Number.isFinite(sbp) && sbp > 0 && !estimated.has("systolic");
+  const tempMeasured = Number.isFinite(temp) && temp > 0 && !estimated.has("temperature");
+  const rrMeasured = Number.isFinite(rr) && rr > 0 && !estimated.has("respiratoryRate");
   const danger = [];
-  if (spo2 < 90) danger.push("casi no le llega oxígeno a la sangre");
-  if (hr > 130 || hr < 40) danger.push("el corazón no late como debería");
-  if (sbp < 90) danger.push("la presión está demasiado baja");
-  if (temp <= 35) danger.push("el cuerpo está muy frío");
-  if (rr >= 25 || rr <= 8) danger.push("no está respirando de forma estable");
+  if (spo2Measured && spo2 < 90) danger.push("casi no le llega oxígeno a la sangre");
+  if (hrMeasured && (hr > 130 || hr < 40)) danger.push("el corazón no late como debería");
+  if (sbpMeasured && sbp < 90) danger.push("la presión está demasiado baja");
+  if (tempMeasured && temp <= 35) danger.push("el cuerpo está muy frío");
+  if (rrMeasured && (rr >= 25 || rr <= 8)) danger.push("no está respirando de forma estable");
 
   const iaReasons = (patient.iaReasons || []).filter((r) => !(fine && blamesFineSigns(r)));
   const merged = [...reasons];
@@ -122,9 +127,11 @@ export function explainWhy(patient) {
   const drivers = [
     fine
       ? "Signos: en rango para la edad. No explican el puntaje."
-      : "Signos: hay números fuera de rango; esos sí mueven el puntaje.",
+      : (estimated.size
+        ? "Signos: varios no se midieron; el puntaje sigue el relato, no un shock inventado."
+        : "Signos: hay números fuera de rango; esos sí mueven el puntaje."),
     condition
-      ? `Relato: ${patient.reason || "sin texto"}. El menú (“${condition.label}”) es solo una pista.`
+      ? `Relato: ${patient.reason || patient.story || "sin texto"}. El menú (“${condition.label}”) es solo una pista.`
       : "Relato: no indicado.",
     hasPhoto ? `Foto: ${patient.photoFindings}` : "Foto: no hay.",
   ];

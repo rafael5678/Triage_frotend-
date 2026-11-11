@@ -298,29 +298,47 @@ h1, h2, .brand strong, .bar-title {
 .chk { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--ink); }
 .banner {
   display: grid;
-  grid-template-columns: minmax(160px, 220px) 1fr auto;
-  gap: 20px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  gap: 16px 24px;
+  align-items: start;
   padding: 22px 24px;
   border-radius: 20px;
   margin: 12px 0 16px;
   border: 2px solid var(--line);
   background: #fff;
 }
+.banner-top {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.banner-score { min-width: 0; }
+.banner-copy {
+  min-width: 0;
+  max-width: 72ch;
+}
+.banner-copy p, .banner-copy li {
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
+  line-height: 1.55;
+}
 .banner.i { background: #fff1f2; border-color: #e11d48; }
 .banner.ii { background: #fff7ed; border-color: #ea580c; }
 .banner.iii { background: #fffbeb; border-color: #ca8a04; }
 .severity-stamp {
   display: grid; place-items: center;
-  min-height: 120px;
+  min-width: 140px;
+  min-height: 88px;
   border-radius: 18px;
   font-family: Fraunces, Georgia, serif;
-  font-size: clamp(28px, 4vw, 42px);
+  font-size: clamp(26px, 3.4vw, 36px);
   font-weight: 700;
   letter-spacing: .04em;
   text-align: center;
   line-height: 1.05;
-  padding: 16px 10px;
+  padding: 14px 18px;
 }
 .severity-stamp.i { background: var(--i); color: #fff; }
 .severity-stamp.ii { background: var(--ii); color: #fff; }
@@ -440,7 +458,7 @@ tr.account-off td { color: var(--muted); }
 /* Destino y recomendaciones */
 .destination {
   border-radius: 16px; padding: 14px 16px; background: var(--pine); color: #f4efe6;
-  min-width: 220px; display: grid; gap: 4px;
+  min-width: 0; max-width: 100%; display: grid; gap: 4px; align-content: start;
 }
 .destination small { text-transform: uppercase; letter-spacing: .1em; font-size: 11px; opacity: .8; }
 .destination b { font-family: Fraunces, serif; font-size: 20px; }
@@ -757,6 +775,8 @@ td.late { color: var(--i); font-weight: 700; }
 }
 @media (max-width: 980px) {
   .auth, .split, .g2, .g3, .stats, .q, .banner { display: flex; flex-direction: column; }
+  .banner-top { width: 100%; }
+  .severity-stamp { min-width: 0; flex: 0 0 auto; }
   .app { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
   .stage { flex: 1; min-height: 0; overflow-y: auto; }
   .auth { grid-template-columns: 1fr; }

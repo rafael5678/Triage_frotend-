@@ -1144,13 +1144,17 @@ export default function App() {
             </p>
             {crashWarning(result) && <p className="warn-line">{crashWarning(result)}</p>}
             <div className={`banner ${result.priority.tone}`}>
-              <div className={`severity-stamp ${result.priority.tone}`}>
-                {result.priority.chip}
+              <div className="banner-top">
+                <div className={`severity-stamp ${result.priority.tone}`}>
+                  {result.priority.chip}
+                </div>
+                <div className="banner-score">
+                  <p className="severity-kicker">{result.priority.esi} · {result.priority.name}</p>
+                  <p className="ticket-xl">{result.ticket || ticketCode(result)}</p>
+                  <h2>{result.score.toFixed(1)} <span>/ 100 de gravedad</span></h2>
+                </div>
               </div>
               <div className="banner-copy">
-                <p className="severity-kicker">{result.priority.esi} · {result.priority.name}</p>
-                <p className="ticket-xl">{result.ticket || ticketCode(result)}</p>
-                <h2>{result.score.toFixed(1)} <span>/ 100 de gravedad</span></h2>
                 <p className="danger-lead">{result.explanation.dangerLead}</p>
                 <p>{result.explanation.meaning}</p>
                 <p>{result.explanation.whyQueue}</p>
