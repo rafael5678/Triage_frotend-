@@ -280,7 +280,7 @@ export async function analyzeTriage(form, localModelScore) {
       reason: String(form.reason || form.motivo || form.story || "").slice(0, 2000),
       localModelScore: localModelScore == null ? null : Number(localModelScore),
     }),
-  }, 8000);
+  }, 120000);
   return mapFromApi(scored);
 }
 
@@ -399,7 +399,7 @@ export async function intakeWithAi({ story, photo, known, comorbidityOptions }) 
       known,
       comorbidityOptions,
     }),
-  }, 8000);
+  }, 120000);
 }
 
 export async function explainField(field, value, context) {

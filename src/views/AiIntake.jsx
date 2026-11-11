@@ -5,6 +5,7 @@ import { resizePhoto } from "../models/photo";
 import { VITAL_LABELS } from "../models/levels";
 import { ageNorms } from "../models/ageNorms";
 import { refreshEstimatedRest } from "../models/vitals";
+import { guessFromStory } from "../models/intakeGuess";
 
 const FILLABLE = ["age", "sex", "heartRate", "spo2", "systolic", "diastolic", "temperature", "respiratoryRate", "glucose", "painScale", "consciousness"];
 const STORY_WINS = ["age", "sex"];
@@ -47,13 +48,29 @@ export default function AiIntake({ form, onApply, comorbidities, flash }) {
         if (!isEmpty(form[key]) && !(form.estimatedFields || []).includes(key)) known[key] = form[key];
       });
       if (form.conditionId) known.conditionId = form.conditionId;
-      const s = await intakeWithAi({
-        story: [story, form.reason].filter(Boolean).join(". "),
-        photo: form.photo,
-        known,
-        comorbidityOptions: comorbidities.map((c) => ({ id: c.id, label: c.label })),
-      });
-      if (!s?.active) throw new Error("La IA no respondió. Espere unos segundos y pulse otra vez Completar el caso.");
+      let s;
+      let fail = "";
+      try {
+        s = await intakeWithAi({
+          story: [story, form.reason].filter(Boolean).join(". "),
+          photo: form.photo,
+          known,
+          comorbidityOptions: comorbidities.map((c) => ({ id: c.id, label: c.label })),
+        });
+      } catch (network) {
+        s = null;
+        fail = network.message;
+      }
+      if (s && !s.active && s.error) {
+        fail = s.error;
+      }
+      if (!s?.active) {
+        s = guessFromStory(story);
+        if (!fail) {
+          fail = "Claude/Gemini no contestaron a tiempo. Se llenó con el relato; revise el motivo y tome los signos.";
+        }
+      }
+      if (fail) setError(fail);
 
       const patch = {};
       const estimated = new Set(form.estimatedFields || []);
